@@ -299,6 +299,23 @@ def quantitative_project_analysis(project_id: int):
     return project_metrics(project_id)
 
 
+# --- Análise de sentimento -----------------------------------------------
+
+
+@app.get("/projects/{project_id}/analysis/sentiment")
+def sentiment_analysis(project_id: int, refresh: bool = False):
+    """
+    Distribuição de sentimento (positivo/negativo/neutro) do projeto, com
+    recorte por áudio e linha do tempo. Resultado é cacheado (inferência cara);
+    `refresh=true` força o recálculo.
+    """
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    from analysis.sentiment import project_sentiment
+
+    return project_sentiment(project_id, refresh=refresh)
+
+
 # --- Transcrição ---------------------------------------------------------
 
 
