@@ -16,6 +16,7 @@
     type Segment,
   } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
+  import { model, device } from "$lib/stores/settings";
 
   let projects = $state<Project[]>([]);
   let audios = $state<Audio[]>([]);
@@ -94,7 +95,8 @@
       const result = await transcribe({
         audio_path: audio.path,
         audio_id: audio.id,
-        device: "auto",
+        model: $model,
+        device: $device,
       });
       segments = result.segments.map((s) => ({ ...s, audio_id: audio.id }));
       patchAudio(audio.id, {

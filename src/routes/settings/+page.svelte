@@ -1,11 +1,10 @@
 <script lang="ts">
   import { t, locale, setLocale, LOCALES, LOCALE_LABELS, type Locale } from "$lib/i18n";
   import { theme, setTheme, type ThemeMode } from "$lib/stores/theme";
+  import { model, device, MODELS } from "$lib/stores/settings";
   import PageHeader from "$lib/components/PageHeader.svelte";
 
-  // Configurações do motor (persistência virá depois; por ora estado local).
-  let model = $state("large-v3-turbo");
-  let device: "auto" | "cpu" | "cuda" = $state("auto");
+  // Motor: modelo e dispositivo são persistidos no store settings (localStorage).
   let diarization = $state(true);
 
   const themeModes: ThemeMode[] = ["light", "dark", "system"];
@@ -58,20 +57,19 @@
     <label class="mb-4 block">
       <span class="mb-1 block text-xs text-[var(--color-content-muted)]">{$t.settings.model}</span>
       <select
-        bind:value={model}
+        bind:value={$model}
         class="w-full rounded-[var(--radius-app)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
       >
-        <option value="large-v3-turbo">large-v3-turbo</option>
-        <option value="large-v3">large-v3</option>
-        <option value="medium">medium</option>
-        <option value="small">small</option>
+        {#each MODELS as m (m)}
+          <option value={m}>{m}</option>
+        {/each}
       </select>
     </label>
 
     <label class="mb-4 block">
       <span class="mb-1 block text-xs text-[var(--color-content-muted)]">{$t.settings.device}</span>
       <select
-        bind:value={device}
+        bind:value={$device}
         class="w-full rounded-[var(--radius-app)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
       >
         <option value="auto">{$t.settings.deviceAuto}</option>
