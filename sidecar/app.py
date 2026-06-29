@@ -249,6 +249,33 @@ def segments_for_code(code_id: int):
     return repo.segments_for_code(code_id)
 
 
+@app.get("/segments/{segment_id}/codes")
+def codes_for_segment(segment_id: int):
+    return repo.codes_for_segment(segment_id)
+
+
+@app.get("/audios/{audio_id}/coding")
+def coding_for_audio(audio_id: int):
+    """Mapa segment_id -> códigos, para a UI destacar trechos codificados."""
+    if repo.get_audio(audio_id) is None:
+        raise HTTPException(404, "Áudio não encontrado")
+    # Chaves JSON são strings — a UI lê por String(segment_id).
+    return {str(k): v for k, v in repo.coding_for_audio(audio_id).items()}
+
+
+# --- Análise qualitativa -------------------------------------------------
+
+
+@app.get("/projects/{project_id}/analysis/qualitative")
+def qualitative_analysis(project_id: int):
+    """Frequência de códigos, co-ocorrência e cobertura da codificação."""
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    from analysis.qualitative import qualitative_summary
+
+    return qualitative_summary(project_id)
+
+
 # --- Transcrição ---------------------------------------------------------
 
 

@@ -266,6 +266,47 @@ def segments_for_code(code_id: int) -> list[dict[str, Any]]:
     return _rows(rows)
 
 
+def codes_for_segment(segment_id: int) -> list[dict[str, Any]]:
+    """Códigos atribuídos a um trecho (para destacar na transcrição)."""
+    conn = get_connection()
+    rows = conn.execute(
+        """
+        SELECT c.*, sc.memo
+        FROM segment_codes sc
+        JOIN codes c ON c.id = sc.code_id
+        WHERE sc.segment_id = ?
+        ORDER BY c.name
+        """,
+        (segment_id,),
+    ).fetchall()
+    return _rows(rows)
+
+
+def coding_for_audio(audio_id: int) -> dict[int, list[dict[str, Any]]]:
+    """
+    Mapa segment_id -> lista de códigos, para todos os trechos de um áudio.
+    A UI usa para colorir/etiquetar os trechos codificados de uma vez só.
+    """
+    conn = get_connection()
+    rows = conn.execute(
+        """
+        SELECT sc.segment_id, c.id, c.name, c.color, sc.memo
+        FROM segment_codes sc
+        JOIN segments s ON s.id = sc.segment_id
+        JOIN codes c ON c.id = sc.code_id
+        WHERE s.audio_id = ?
+        ORDER BY c.name
+        """,
+        (audio_id,),
+    ).fetchall()
+    out: dict[int, list[dict[str, Any]]] = {}
+    for r in rows:
+        out.setdefault(r["segment_id"], []).append(
+            {"id": r["id"], "name": r["name"], "color": r["color"], "memo": r["memo"]}
+        )
+    return out
+
+
 # --- Análises (cache) ----------------------------------------------------
 
 

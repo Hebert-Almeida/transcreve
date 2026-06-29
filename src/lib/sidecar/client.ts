@@ -144,6 +144,41 @@ export interface Code {
   created_at: string;
 }
 
+/** Código atribuído a um trecho (com memo opcional do vínculo). */
+export interface AssignedCode {
+  id: number;
+  name: string;
+  color: string | null;
+  memo: string | null;
+}
+
+/** Mapa segment_id (string) -> códigos atribuídos. */
+export type CodingMap = Record<string, AssignedCode[]>;
+
+export interface CodeFrequency {
+  id: number;
+  name: string;
+  color: string | null;
+  segment_count: number;
+  word_count: number;
+}
+
+export interface CodeCooccurrence {
+  code_a: number;
+  code_b: number;
+  name_a: string;
+  name_b: string;
+  count: number;
+}
+
+export interface QualitativeSummary {
+  codes: CodeFrequency[];
+  cooccurrence: CodeCooccurrence[];
+  coded_segments: number;
+  total_segments: number;
+  coverage: number;
+}
+
 // --- Projetos -----------------------------------------------------------
 
 export const projects = {
@@ -182,6 +217,7 @@ export const audios = {
     }),
   remove: (id: number) => request<void>(`/audios/${id}`, { method: "DELETE" }),
   segments: (id: number) => request<Segment[]>(`/audios/${id}/segments`),
+  coding: (id: number) => request<CodingMap>(`/audios/${id}/coding`),
 };
 
 // --- Códigos / codificação qualitativa ----------------------------------
@@ -207,6 +243,15 @@ export const codes = {
     }),
   segments: (codeId: number) =>
     request<Segment[]>(`/codes/${codeId}/segments`),
+  forSegment: (segmentId: number) =>
+    request<AssignedCode[]>(`/segments/${segmentId}/codes`),
+};
+
+// --- Análise ------------------------------------------------------------
+
+export const analysis = {
+  qualitative: (projectId: number) =>
+    request<QualitativeSummary>(`/projects/${projectId}/analysis/qualitative`),
 };
 
 // --- Transcrição --------------------------------------------------------
