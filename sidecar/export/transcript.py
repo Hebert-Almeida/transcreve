@@ -79,14 +79,14 @@ def _columns(include_coding: bool) -> list[str]:
 
 
 def _format_csv(
-    title: str, rows: list[dict[str, Any]], include_coding: bool, *, delimiter: str
+    rows: list[dict[str, Any]], include_coding: bool, *, delimiter: str
 ) -> bytes:
     return rows_to_csv(
         TableExport(_columns(include_coding), rows), delimiter=delimiter
     )
 
 
-def _format_json(title: str, rows: list[dict[str, Any]], include_coding: bool) -> bytes:
+def _format_json(title: str, rows: list[dict[str, Any]]) -> bytes:
     return rows_to_json({"title": title, "segments": rows})
 
 
@@ -165,24 +165,23 @@ def export_transcript(
     `fmt`: csv | tsv | json | srt | vtt | docx | pdf. `include_coding` adiciona os
     códigos qualitativos (ignorado em SRT/VTT, que são só legenda).
     """
+    if fmt not in MEDIA_TYPES:
+        raise ValueError(f"Formato de exportação não suportado: {fmt}")
+
     title, rows = _collect(
         project_id=project_id, audio_id=audio_id, include_coding=include_coding
     )
     base = slugify(title)
 
-    if fmt == "csv":
-        content = _format_csv(title, rows, include_coding, delimiter=",")
-    elif fmt == "tsv":
-        content = _format_csv(title, rows, include_coding, delimiter="\t")
+    if fmt in ("csv", "tsv"):
+        content = _format_csv(rows, include_coding, delimiter="\t" if fmt == "tsv" else ",")
     elif fmt == "json":
-        content = _format_json(title, rows, include_coding)
+        content = _format_json(title, rows)
     elif fmt in ("srt", "vtt"):
         content = _format_subtitle(rows, fmt)
     elif fmt == "docx":
         content = _format_docx(title, rows, include_coding)
-    elif fmt == "pdf":
+    else:  # pdf
         content = _format_pdf(title, rows, include_coding)
-    else:
-        raise ValueError(f"Formato de exportação não suportado: {fmt}")
 
     return Export(content, MEDIA_TYPES[fmt], f"{base}.{fmt}")
