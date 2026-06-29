@@ -1,0 +1,22 @@
+# --- Servidor ---
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*
+
+# --- Transcrição / IA ---
+# WhisperX = faster-whisper + alinhamento + diarização (pyannote).
+# Observação: WhisperX/PyTorch costumam ter wheels para Python 3.10–3.12.
+# Em Python 3.14 pode não haver suporte ainda — usar venv 3.12 se necessário.
+whisperx==3.*
+
+# --- Análise quantitativa/qualitativa ---
+pandas==2.*
+numpy==2.*
+
+# --- Análise de sentimento PT-BR ---
+# pysentimiento traz modelos PT/EN/ES para sentimento e emoção.
+pysentimiento==0.7.*
+
+# --- Exportação ---
+python-docx==1.*
+reportlab==4.*

@@ -1,0 +1,71 @@
+// Português (Brasil) — idioma padrão e fonte da verdade para as chaves.
+const ptBR = {
+  app: {
+    name: "Transcreve",
+    tagline: "Transcrição e análise de áudios de pesquisa — local e confidencial",
+  },
+  nav: {
+    projects: "Projetos",
+    transcription: "Transcrição",
+    analysis: "Análise",
+    settings: "Configurações",
+  },
+  common: {
+    new: "Novo",
+    open: "Abrir",
+    save: "Salvar",
+    cancel: "Cancelar",
+    delete: "Excluir",
+    export: "Exportar",
+    search: "Buscar",
+    loading: "Carregando…",
+    language: "Idioma",
+    theme: "Tema",
+    themeLight: "Claro",
+    themeDark: "Escuro",
+    themeSystem: "Sistema",
+  },
+  projects: {
+    title: "Projetos",
+    empty: "Nenhum projeto ainda.",
+    create: "Novo projeto",
+    name: "Nome do projeto",
+  },
+  transcription: {
+    title: "Transcrição",
+    importAudio: "Importar áudio",
+    speaker: "Falante",
+    start: "Início",
+    end: "Fim",
+    text: "Texto",
+    status: {
+      idle: "Aguardando",
+      queued: "Na fila",
+      running: "Transcrevendo…",
+      done: "Concluído",
+      error: "Erro",
+    },
+  },
+  analysis: {
+    title: "Análise",
+    quantitative: "Quantitativa",
+    qualitative: "Qualitativa",
+    sentiment: "Sentimento",
+    wordCount: "Total de palavras",
+    speakingTime: "Tempo de fala",
+    speakingRate: "Velocidade (palavras/min)",
+    lexicalRichness: "Riqueza lexical",
+  },
+  settings: {
+    title: "Configurações",
+    engine: "Motor de transcrição",
+    model: "Modelo",
+    device: "Processamento",
+    deviceAuto: "Automático",
+    deviceCpu: "CPU",
+    deviceGpu: "GPU (CUDA)",
+    diarization: "Diarização (identificar falantes)",
+  },
+} as const;
+
+export default ptBR;
