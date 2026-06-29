@@ -25,6 +25,11 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m} min`;
 }
 
+/** Extrai uma mensagem legível de um erro desconhecido (catch). */
+export function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 /** Substitui `{chave}` por valores — interpolação simples para strings i18n. */
 export function interpolate(
   template: string,

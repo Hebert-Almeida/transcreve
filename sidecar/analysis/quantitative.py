@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter
+from functools import lru_cache
 from typing import Any
 
 from db import get_connection
@@ -39,8 +40,13 @@ def _tokenize(text: str) -> list[str]:
     return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
 
 
+@lru_cache(maxsize=None)
 def _strip_accents(word: str) -> str:
-    """Normaliza para comparar com a lista de stopwords (sem acento)."""
+    """Normaliza para comparar com a lista de stopwords (sem acento).
+
+    Em cache: o mesmo punhado de palavras de função se repete milhares de vezes
+    numa transcrição, então normaliza-se cada palavra distinta uma única vez.
+    """
     return "".join(
         c
         for c in unicodedata.normalize("NFD", word)
@@ -48,8 +54,9 @@ def _strip_accents(word: str) -> str:
     )
 
 
-def _is_stopword(word: str) -> bool:
-    return _strip_accents(word) in _STOPWORDS_PT
+def _is_content_word(word: str) -> bool:
+    """Palavra de conteúdo para a frequência de termos (sem stopwords, len > 1)."""
+    return len(word) > 1 and _strip_accents(word) not in _STOPWORDS_PT
 
 
 def _segment_rows(audio_id: int) -> list[Any]:
@@ -59,6 +66,33 @@ def _segment_rows(audio_id: int) -> list[Any]:
         "WHERE audio_id = ? ORDER BY seq",
         (audio_id,),
     ).fetchall()
+
+
+def _seconds(row: Any) -> float:
+    """Duração não-negativa de um segmento."""
+    return max(0.0, (row["end"] or 0.0) - (row["start"] or 0.0))
+
+
+def _basic_metrics(tokens: list[str], seconds: float) -> dict[str, Any]:
+    """Métricas descritivas a partir de uma lista de tokens e do tempo falado."""
+    word_count = len(tokens)
+    minutes = seconds / 60.0
+    return {
+        "word_count": word_count,
+        "unique_words": len(set(tokens)),
+        "spoken_seconds": round(seconds, 2),
+        "speaking_rate": round(word_count / minutes, 1) if minutes > 0 else 0.0,
+        # Type-token ratio: vocabulário distinto sobre total (riqueza lexical).
+        "lexical_richness": round(len(set(tokens)) / word_count, 4)
+        if word_count
+        else 0.0,
+    }
+
+
+def _top_terms(counter: Counter[str], limit: int) -> list[dict[str, Any]]:
+    return [
+        {"term": term, "count": count} for term, count in counter.most_common(limit)
+    ]
 
 
 def audio_metrics(audio_id: int, *, top_terms: int = 25) -> dict[str, Any]:
@@ -80,51 +114,36 @@ def audio_metrics(audio_id: int, *, top_terms: int = 25) -> dict[str, Any]:
     for r in rows:
         tokens = _tokenize(r["text"])
         all_tokens.extend(tokens)
-        dur = max(0.0, (r["end"] or 0.0) - (r["start"] or 0.0))
+        dur = _seconds(r)
         spoken_seconds += dur
 
         speaker = r["speaker"] or ""
         by_speaker_tokens.setdefault(speaker, []).extend(tokens)
         by_speaker_time[speaker] = by_speaker_time.get(speaker, 0.0) + dur
 
-    word_count = len(all_tokens)
-    unique_words = len(set(all_tokens))
-    minutes = spoken_seconds / 60.0
-    speaking_rate = (word_count / minutes) if minutes > 0 else 0.0
-    # Type-token ratio: vocabulário distinto sobre total (riqueza lexical).
-    lexical_richness = (unique_words / word_count) if word_count else 0.0
+    counter = Counter(t for t in all_tokens if _is_content_word(t))
 
-    counter = Counter(t for t in all_tokens if not _is_stopword(t) and len(t) > 1)
-    top = [
-        {"term": term, "count": count}
-        for term, count in counter.most_common(top_terms)
-    ]
-
-    speakers = [
-        {
-            "speaker": speaker or None,
-            "word_count": len(tokens),
-            "spoken_seconds": round(by_speaker_time.get(speaker, 0.0), 2),
-            "speaking_rate": round(
-                len(tokens) / (by_speaker_time[speaker] / 60.0), 1
-            )
-            if by_speaker_time.get(speaker, 0.0) > 0
-            else 0.0,
-        }
-        for speaker, tokens in by_speaker_tokens.items()
-    ]
+    speakers: list[dict[str, Any]] = []
+    for speaker, tokens in by_speaker_tokens.items():
+        secs = by_speaker_time.get(speaker, 0.0)
+        speakers.append(
+            {
+                "speaker": speaker or None,
+                "word_count": len(tokens),
+                "spoken_seconds": round(secs, 2),
+                "speaking_rate": round(len(tokens) / (secs / 60.0), 1)
+                if secs > 0
+                else 0.0,
+            }
+        )
     # Mais falantes primeiro pelo tempo de fala (mais informativo num relatório).
     speakers.sort(key=lambda s: s["spoken_seconds"], reverse=True)
     # Só expõe o recorte por falante quando há diarização (mais de um falante real).
     has_speakers = len([s for s in speakers if s["speaker"]]) > 1
 
     return {
-        "word_count": word_count,
-        "unique_words": unique_words,
-        "spoken_seconds": round(spoken_seconds, 2),
-        "speaking_rate": round(speaking_rate, 1),
-        "lexical_richness": round(lexical_richness, 4),
-        "top_terms": top,
+        **_basic_metrics(all_tokens, spoken_seconds),
+        "top_terms": _top_terms(counter, top_terms),
         "speakers": speakers if has_speakers else [],
     }
 
@@ -149,51 +168,26 @@ def project_metrics(project_id: int, *, top_terms: int = 25) -> dict[str, Any]:
     project_counter: Counter[str] = Counter()
 
     for a in audios:
-        rows = _segment_rows(a["id"])
         tokens: list[str] = []
         seconds = 0.0
-        for r in rows:
-            toks = _tokenize(r["text"])
-            tokens.extend(toks)
-            seconds += max(0.0, (r["end"] or 0.0) - (r["start"] or 0.0))
+        for r in _segment_rows(a["id"]):
+            tokens.extend(_tokenize(r["text"]))
+            seconds += _seconds(r)
 
         total_tokens.extend(tokens)
         total_seconds += seconds
-        project_counter.update(
-            t for t in tokens if not _is_stopword(t) and len(t) > 1
-        )
+        project_counter.update(t for t in tokens if _is_content_word(t))
 
-        minutes = seconds / 60.0
         per_audio.append(
             {
                 "audio_id": a["id"],
                 "filename": a["filename"],
-                "word_count": len(tokens),
-                "unique_words": len(set(tokens)),
-                "spoken_seconds": round(seconds, 2),
-                "speaking_rate": round(len(tokens) / minutes, 1)
-                if minutes > 0
-                else 0.0,
-                "lexical_richness": round(len(set(tokens)) / len(tokens), 4)
-                if tokens
-                else 0.0,
+                **_basic_metrics(tokens, seconds),
             }
         )
 
-    word_count = len(total_tokens)
-    unique_words = len(set(total_tokens))
-    minutes = total_seconds / 60.0
     return {
-        "word_count": word_count,
-        "unique_words": unique_words,
-        "spoken_seconds": round(total_seconds, 2),
-        "speaking_rate": round(word_count / minutes, 1) if minutes > 0 else 0.0,
-        "lexical_richness": round(unique_words / word_count, 4)
-        if word_count
-        else 0.0,
-        "top_terms": [
-            {"term": term, "count": count}
-            for term, count in project_counter.most_common(top_terms)
-        ],
+        **_basic_metrics(total_tokens, total_seconds),
+        "top_terms": _top_terms(project_counter, top_terms),
         "audios": per_audio,
     }

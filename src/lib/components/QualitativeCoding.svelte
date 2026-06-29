@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { formatTime } from "$lib/format";
+  import { formatTime, errorMessage as msg } from "$lib/format";
   import TranscriptView from "$lib/components/TranscriptView.svelte";
   import {
     audios as audioApi,
@@ -51,10 +51,6 @@
     segments = [];
     coding = {};
     activeSegment = null;
-  }
-
-  function msg(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 
   async function refreshSummary() {

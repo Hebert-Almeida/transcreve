@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { formatDuration } from "$lib/format";
+  import { formatDuration, errorMessage as msg } from "$lib/format";
   import {
     analysis as analysisApi,
     type QuantitativeSummary,
@@ -11,10 +11,6 @@
   let summary = $state<QuantitativeSummary | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
-
-  function msg(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
-  }
 
   // Recarrega quando o projeto muda.
   $effect(() => {
@@ -29,13 +25,20 @@
   });
 
   // Maior contagem entre os termos, para dimensionar as barras.
-  let maxTerm = $derived(
-    summary && summary.top_terms.length > 0
-      ? summary.top_terms[0].count
-      : 1,
-  );
+  let maxTerm = $derived(summary?.top_terms[0]?.count ?? 1);
 
-  let hasData = $derived(summary != null && summary.audios.length > 0);
+  // Cartões da visão geral (apenas quando há resumo carregado).
+  let cards = $derived(
+    summary
+      ? [
+          { label: $t.analysis.wordCount, value: summary.word_count.toLocaleString() },
+          { label: $t.analysis.uniqueWords, value: summary.unique_words.toLocaleString() },
+          { label: $t.analysis.speakingTime, value: formatDuration(summary.spoken_seconds) },
+          { label: $t.analysis.speakingRate, value: String(summary.speaking_rate) },
+          { label: $t.analysis.lexicalRichness, value: summary.lexical_richness.toFixed(2) },
+        ]
+      : [],
+  );
 </script>
 
 {#if error}
@@ -46,20 +49,20 @@
   <div class="rounded-[var(--radius-app)] border border-dashed border-[var(--color-border)] px-8 py-16 text-center text-sm text-[var(--color-content-muted)]">
     {$t.common.loading}
   </div>
-{:else if !hasData}
+{:else if !summary || summary.audios.length === 0}
   <div class="rounded-[var(--radius-app)] border border-dashed border-[var(--color-border)] px-8 py-16 text-center text-sm text-[var(--color-content-muted)]">
     {$t.analysis.noTranscriptions}
   </div>
-{:else if summary}
+{:else}
   <!-- Cartões de visão geral -->
   <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-content-muted)]">
     {$t.analysis.overview}
   </h3>
   <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-    {#each [[$t.analysis.wordCount, summary.word_count.toLocaleString()], [$t.analysis.uniqueWords, summary.unique_words.toLocaleString()], [$t.analysis.speakingTime, formatDuration(summary.spoken_seconds)], [$t.analysis.speakingRate, String(summary.speaking_rate)], [$t.analysis.lexicalRichness, summary.lexical_richness.toFixed(2)]] as [label, value] (label)}
+    {#each cards as card (card.label)}
       <div class="rounded-[var(--radius-app)] border border-[var(--color-border)] p-3">
-        <p class="text-2xl font-semibold tabular-nums">{value}</p>
-        <p class="mt-1 text-xs text-[var(--color-content-muted)]">{label}</p>
+        <p class="text-2xl font-semibold tabular-nums">{card.value}</p>
+        <p class="mt-1 text-xs text-[var(--color-content-muted)]">{card.label}</p>
       </div>
     {/each}
   </div>
