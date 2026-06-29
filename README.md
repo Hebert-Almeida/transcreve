@@ -57,4 +57,7 @@ npm run tauri dev
 
 ## 📄 Licença
 
-[MIT](LICENSE) © 2026 Hebert Almeida
+[GPL-3.0](LICENSE) © 2026 Hebert Almeida
+
+Software livre sob a GNU General Public License v3.0 — qualquer trabalho derivado
+também deve permanecer aberto sob a mesma licença.

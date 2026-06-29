@@ -3,6 +3,7 @@ name = "transcreve"
 version = "0.1.0"
 description = "Transcrição e análise de áudios de pesquisa — 100% local, offline e confidencial."
 authors = ["Hebert Almeida"]
+license = "GPL-3.0-or-later"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
