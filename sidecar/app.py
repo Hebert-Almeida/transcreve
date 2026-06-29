@@ -72,6 +72,78 @@ def hardware() -> HardwareResponse:
     )
 
 
+# --- Transcrição ---------------------------------------------------------
+
+
+class TranscribeRequest(BaseModel):
+    audio_path: str
+    language: str | None = None
+    model: str | None = None
+    device: str = "auto"
+
+
+class WordOut(BaseModel):
+    start: float
+    end: float
+    word: str
+    probability: float | None = None
+
+
+class SegmentOut(BaseModel):
+    id: int
+    start: float
+    end: float
+    text: str
+    speaker: str | None = None
+    words: list[WordOut] = []
+
+
+class TranscribeResponse(BaseModel):
+    language: str
+    language_probability: float
+    duration: float
+    model: str
+    device: str
+    segments: list[SegmentOut]
+
+
+@app.post("/transcribe", response_model=TranscribeResponse)
+def transcribe_endpoint(req: TranscribeRequest) -> TranscribeResponse:
+    """
+    Transcreve um áudio (caminho local). Síncrono por ora; uma versão com
+    progresso em tempo real (WebSocket) virá em seguida.
+    """
+    from transcribe import transcribe as run_transcribe
+
+    result = run_transcribe(
+        req.audio_path,
+        language=req.language,
+        model=req.model,
+        device=req.device,  # type: ignore[arg-type]
+    )
+    return TranscribeResponse(
+        language=result.language,
+        language_probability=result.language_probability,
+        duration=result.duration,
+        model=result.model,
+        device=result.device,
+        segments=[
+            SegmentOut(
+                id=s.id,
+                start=s.start,
+                end=s.end,
+                text=s.text,
+                speaker=s.speaker,
+                words=[
+                    WordOut(start=w.start, end=w.end, word=w.word, probability=w.probability)
+                    for w in s.words
+                ],
+            )
+            for s in result.segments
+        ],
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
 
