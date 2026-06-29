@@ -14,9 +14,10 @@ import sqlite3
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from urllib.parse import quote
 from pydantic import BaseModel
 
 import repository as repo
@@ -314,6 +315,64 @@ def sentiment_analysis(project_id: int, refresh: bool = False):
     from analysis.sentiment import project_sentiment
 
     return project_sentiment(project_id, refresh=refresh)
+
+
+# --- Exportação ----------------------------------------------------------
+
+
+def _download(export) -> Response:
+    """Embrulha um `Export` numa resposta de download (Content-Disposition)."""
+    # RFC 5987 para nomes com acento; filename ASCII simples como fallback.
+    disposition = (
+        f"attachment; filename*=UTF-8''{quote(export.filename)}"
+    )
+    return Response(
+        content=export.content,
+        media_type=export.media_type,
+        headers={"Content-Disposition": disposition},
+    )
+
+
+@app.get("/audios/{audio_id}/export/{fmt}")
+def export_audio_transcript(audio_id: int, fmt: str, coding: bool = False):
+    """Transcrição de um áudio (csv|tsv|json|srt|vtt|docx|pdf)."""
+    if repo.get_audio(audio_id) is None:
+        raise HTTPException(404, "Áudio não encontrado")
+    from export.transcript import export_transcript
+
+    try:
+        export = export_transcript(fmt, audio_id=audio_id, include_coding=coding)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return _download(export)
+
+
+@app.get("/projects/{project_id}/export/{fmt}")
+def export_project_transcript(project_id: int, fmt: str, coding: bool = False):
+    """Transcrição de todos os áudios do projeto (mesmos formatos)."""
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    from export.transcript import export_transcript
+
+    try:
+        export = export_transcript(fmt, project_id=project_id, include_coding=coding)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return _download(export)
+
+
+@app.get("/projects/{project_id}/analysis/{kind}/export/{fmt}")
+def export_project_analysis(project_id: int, kind: str, fmt: str):
+    """Resultado de uma análise do projeto (quantitative|sentiment em csv|tsv|json)."""
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    from export.analysis import export_analysis
+
+    try:
+        export = export_analysis(kind, fmt, project_id=project_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return _download(export)
 
 
 # --- Transcrição ---------------------------------------------------------
