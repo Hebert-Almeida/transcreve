@@ -27,7 +27,12 @@ sidecar/__pycache__/
 .pytest_cache/
 sidecar/dist/
 sidecar/build/
+# Specs do PyInstaller são geradas (ignoradas), exceto a nossa, versionada.
 *.spec
+!sidecar/transcreve-sidecar.spec
+
+# Binário congelado do sidecar (gerado por build.py; multi-GB com modelos).
+src-tauri/binaries/
 
 # --- Modelos / artefatos pesados (não versionar) ---
 models/
