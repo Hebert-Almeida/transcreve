@@ -3,14 +3,17 @@
   import { t } from "$lib/i18n";
   import PageHeader from "$lib/components/PageHeader.svelte";
   import TranscriptView from "$lib/components/TranscriptView.svelte";
+  import ExportMenu, { type ExportOption } from "$lib/components/ExportMenu.svelte";
   import { formatDuration } from "$lib/format";
   import {
     projects as projectApi,
     audios as audioApi,
     transcribe,
+    exports as exportApi,
     type Project,
     type Audio,
     type Segment,
+    type TranscriptFormat,
   } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
 
@@ -124,6 +127,28 @@
   let fullText = $derived(segments.map((s) => s.text).join(" "));
   let copied = $state(false);
 
+  // Opções de exportação da transcrição do áudio selecionado. Tabela (RStudio),
+  // legenda e documento — todas baixadas do sidecar e salvas via diálogo.
+  function audioExportOptions(audioId: number): ExportOption[] {
+    const fmts: { fmt: TranscriptFormat; label: string }[] = [
+      { fmt: "csv", label: `CSV · ${$t.export.table}` },
+      { fmt: "tsv", label: `TSV · ${$t.export.table}` },
+      { fmt: "json", label: `JSON · ${$t.export.data}` },
+      { fmt: "srt", label: `SRT · ${$t.export.subtitle}` },
+      { fmt: "vtt", label: `VTT · ${$t.export.subtitle}` },
+      { fmt: "docx", label: `DOCX · ${$t.export.document}` },
+      { fmt: "pdf", label: `PDF · ${$t.export.document}` },
+    ];
+    // Inclui codificação nos formatos que a suportam (tabela/documento, não legenda).
+    return fmts.map(({ fmt, label }) => ({
+      label,
+      run: () =>
+        exportApi.audioTranscript(audioId, fmt, {
+          coding: fmt !== "srt" && fmt !== "vtt",
+        }),
+    }));
+  }
+
   async function copyText() {
     await navigator.clipboard.writeText(fullText);
     copied = true;
@@ -226,6 +251,7 @@
                 >
                   {copied ? $t.transcription.copied : $t.transcription.copyText}
                 </button>
+                <ExportMenu options={audioExportOptions(selectedAudio.id)} />
               {/if}
               <button
                 class="rounded-[var(--radius-app)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-content)] hover:opacity-90 disabled:opacity-50"

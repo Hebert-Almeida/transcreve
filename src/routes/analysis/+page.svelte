@@ -5,7 +5,14 @@
   import QualitativeCoding from "$lib/components/QualitativeCoding.svelte";
   import QuantitativeAnalysis from "$lib/components/QuantitativeAnalysis.svelte";
   import SentimentAnalysis from "$lib/components/SentimentAnalysis.svelte";
-  import { projects as projectApi, type Project } from "$lib/sidecar/client";
+  import ExportMenu, { type ExportOption } from "$lib/components/ExportMenu.svelte";
+  import {
+    projects as projectApi,
+    exports as exportApi,
+    type Project,
+    type TranscriptFormat,
+    type AnalysisExportFormat,
+  } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
 
   let tab: "quantitative" | "qualitative" | "sentiment" = $state("qualitative");
@@ -18,6 +25,40 @@
       /* erro tratado nas telas filhas */
     }
   });
+
+  // Exportações do projeto: a transcrição inteira (com codificação) e, nas abas
+  // quantitativa/sentimento, também o resultado da análise atual em tabela/JSON.
+  function projectExportOptions(pid: number): ExportOption[] {
+    const transcriptFmts: TranscriptFormat[] = [
+      "csv",
+      "tsv",
+      "json",
+      "srt",
+      "vtt",
+      "docx",
+      "pdf",
+    ];
+    const opts: ExportOption[] = transcriptFmts.map((fmt) => ({
+      label: `${$t.export.transcriptProject} · ${fmt.toUpperCase()}`,
+      run: () =>
+        exportApi.projectTranscript(pid, fmt, {
+          coding: fmt !== "srt" && fmt !== "vtt",
+        }),
+    }));
+
+    // Resultado da análise só faz sentido nas abas com payload exportável.
+    if (tab === "quantitative" || tab === "sentiment") {
+      const kind = tab; // fixa o tipo estreitado para o closure
+      const analysisFmts: AnalysisExportFormat[] = ["csv", "tsv", "json"];
+      for (const fmt of analysisFmts) {
+        opts.push({
+          label: `${$t.export.analysis} · ${fmt.toUpperCase()}`,
+          run: () => exportApi.analysis(pid, kind, fmt),
+        });
+      }
+    }
+    return opts;
+  }
 </script>
 
 <PageHeader title={$t.analysis.title} />
@@ -38,6 +79,10 @@
         <option value={p.id}>{p.name}</option>
       {/each}
     </select>
+
+    {#if $selectedProjectId != null}
+      <ExportMenu options={projectExportOptions($selectedProjectId)} />
+    {/if}
   </div>
 
   <div class="mb-6 flex gap-1 border-b border-[var(--color-border)]">
