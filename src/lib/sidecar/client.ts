@@ -43,13 +43,10 @@ interface RequestOptions {
   body?: unknown;
 }
 
-async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+/** Faz a requisição e lança `SidecarError` (com o detalhe do servidor) se !ok. */
+async function fetchOrThrow(path: string, init?: RequestInit): Promise<Response> {
   const url = await baseUrl();
-  const res = await fetch(`${url}${path}`, {
-    method: opts.method ?? "GET",
-    headers: { "Content-Type": "application/json" },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  const res = await fetch(`${url}${path}`, init);
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -60,6 +57,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     }
     throw new SidecarError(res.status, detail, path);
   }
+  return res;
+}
+
+async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const res = await fetchOrThrow(path, {
+    method: opts.method ?? "GET",
+    headers: { "Content-Type": "application/json" },
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  });
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -352,32 +358,34 @@ export const analysis = {
 
 // --- Exportação ---------------------------------------------------------
 
-/** Formatos de exportação de transcrição. */
-export type TranscriptFormat =
-  | "csv"
-  | "tsv"
-  | "json"
-  | "srt"
-  | "vtt"
-  | "docx"
-  | "pdf";
+/**
+ * Fonte única dos formatos de transcrição: o conjunto de formatos, sua família
+ * (rótulo na UI) e se carregam a codificação qualitativa. Tudo o mais — o tipo
+ * `TranscriptFormat`, as opções do menu e a decisão de incluir codificação —
+ * deriva daqui, então adicionar um formato é uma linha só.
+ */
+export const TRANSCRIPT_FORMATS = [
+  { fmt: "csv", kind: "table", supportsCoding: true },
+  { fmt: "tsv", kind: "table", supportsCoding: true },
+  { fmt: "json", kind: "data", supportsCoding: true },
+  { fmt: "srt", kind: "subtitle", supportsCoding: false },
+  { fmt: "vtt", kind: "subtitle", supportsCoding: false },
+  { fmt: "docx", kind: "document", supportsCoding: true },
+  { fmt: "pdf", kind: "document", supportsCoding: true },
+] as const satisfies readonly {
+  fmt: string;
+  kind: "table" | "data" | "subtitle" | "document";
+  supportsCoding: boolean;
+}[];
+
+/** Formatos de exportação de transcrição (derivado de `TRANSCRIPT_FORMATS`). */
+export type TranscriptFormat = (typeof TRANSCRIPT_FORMATS)[number]["fmt"];
 
 /** Formatos de exportação de resultado de análise. */
 export type AnalysisExportFormat = "csv" | "tsv" | "json";
 
 /** Análises exportáveis. */
 export type AnalysisKind = "quantitative" | "sentiment";
-
-/** Extensões oferecidas no diálogo "Salvar como", por formato. */
-const EXPORT_EXTENSIONS: Record<string, string> = {
-  csv: "csv",
-  tsv: "tsv",
-  json: "json",
-  srt: "srt",
-  vtt: "vtt",
-  docx: "docx",
-  pdf: "pdf",
-};
 
 /**
  * Baixa os bytes de uma exportação do sidecar, abre o diálogo "Salvar como" e
@@ -389,18 +397,7 @@ async function downloadExport(
   suggestedName: string,
   ext: string,
 ): Promise<string | null> {
-  const url = await baseUrl();
-  const res = await fetch(`${url}${path}`);
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const data = await res.json();
-      if (data && typeof data.detail === "string") detail = data.detail;
-    } catch {
-      /* corpo não-JSON */
-    }
-    throw new SidecarError(res.status, detail, path);
-  }
+  const res = await fetchOrThrow(path);
   const bytes = new Uint8Array(await res.arrayBuffer());
 
   const { save } = await import("@tauri-apps/plugin-dialog");
@@ -424,8 +421,8 @@ export const exports = {
   ) =>
     downloadExport(
       `/audios/${audioId}/export/${fmt}${coding ? "?coding=true" : ""}`,
-      `transcricao.${EXPORT_EXTENSIONS[fmt]}`,
-      EXPORT_EXTENSIONS[fmt],
+      `transcricao.${fmt}`,
+      fmt,
     ),
 
   /** Exporta a transcrição de todos os áudios do projeto. */
@@ -436,8 +433,8 @@ export const exports = {
   ) =>
     downloadExport(
       `/projects/${projectId}/export/${fmt}${coding ? "?coding=true" : ""}`,
-      `transcricao.${EXPORT_EXTENSIONS[fmt]}`,
-      EXPORT_EXTENSIONS[fmt],
+      `transcricao.${fmt}`,
+      fmt,
     ),
 
   /** Exporta o resultado de uma análise do projeto. */
@@ -448,8 +445,8 @@ export const exports = {
   ) =>
     downloadExport(
       `/projects/${projectId}/analysis/${kind}/export/${fmt}`,
-      `${kind}.${EXPORT_EXTENSIONS[fmt]}`,
-      EXPORT_EXTENSIONS[fmt],
+      `${kind}.${fmt}`,
+      fmt,
     ),
 };
 
