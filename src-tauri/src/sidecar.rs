@@ -25,10 +25,12 @@ fn build_command(
     if cfg!(debug_assertions) {
         // Dev: usa o Python do venv. O cwd do `tauri dev` é `src-tauri`,
         // então `../sidecar` aponta para a pasta do sidecar.
+        // Usa a venv 3.12 (`.venv312`): o pysentimiento (torch/transformers)
+        // não tem wheels para 3.14, e ela já tem todo o stack do sidecar.
         let python = if cfg!(windows) {
-            "../sidecar/.venv/Scripts/python.exe"
+            "../sidecar/.venv312/Scripts/python.exe"
         } else {
-            "../sidecar/.venv/bin/python"
+            "../sidecar/.venv312/bin/python"
         };
         Ok(app
             .shell()
