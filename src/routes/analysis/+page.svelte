@@ -9,8 +9,8 @@
   import {
     projects as projectApi,
     exports as exportApi,
+    TRANSCRIPT_FORMATS,
     type Project,
-    type TranscriptFormat,
     type AnalysisExportFormat,
   } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
@@ -29,22 +29,13 @@
   // Exportações do projeto: a transcrição inteira (com codificação) e, nas abas
   // quantitativa/sentimento, também o resultado da análise atual em tabela/JSON.
   function projectExportOptions(pid: number): ExportOption[] {
-    const transcriptFmts: TranscriptFormat[] = [
-      "csv",
-      "tsv",
-      "json",
-      "srt",
-      "vtt",
-      "docx",
-      "pdf",
-    ];
-    const opts: ExportOption[] = transcriptFmts.map((fmt) => ({
-      label: `${$t.export.transcriptProject} · ${fmt.toUpperCase()}`,
-      run: () =>
-        exportApi.projectTranscript(pid, fmt, {
-          coding: fmt !== "srt" && fmt !== "vtt",
-        }),
-    }));
+    const opts: ExportOption[] = TRANSCRIPT_FORMATS.map(
+      ({ fmt, supportsCoding }) => ({
+        label: `${$t.export.transcriptProject} · ${fmt.toUpperCase()}`,
+        run: () =>
+          exportApi.projectTranscript(pid, fmt, { coding: supportsCoding }),
+      }),
+    );
 
     // Resultado da análise só faz sentido nas abas com payload exportável.
     if (tab === "quantitative" || tab === "sentiment") {

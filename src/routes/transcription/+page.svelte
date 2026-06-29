@@ -10,10 +10,10 @@
     audios as audioApi,
     transcribe,
     exports as exportApi,
+    TRANSCRIPT_FORMATS,
     type Project,
     type Audio,
     type Segment,
-    type TranscriptFormat,
   } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
 
@@ -128,24 +128,13 @@
   let copied = $state(false);
 
   // Opções de exportação da transcrição do áudio selecionado. Tabela (RStudio),
-  // legenda e documento — todas baixadas do sidecar e salvas via diálogo.
+  // legenda e documento — derivadas de TRANSCRIPT_FORMATS (fonte única). A
+  // codificação só vai nos formatos que a suportam (tabela/documento, não legenda).
   function audioExportOptions(audioId: number): ExportOption[] {
-    const fmts: { fmt: TranscriptFormat; label: string }[] = [
-      { fmt: "csv", label: `CSV · ${$t.export.table}` },
-      { fmt: "tsv", label: `TSV · ${$t.export.table}` },
-      { fmt: "json", label: `JSON · ${$t.export.data}` },
-      { fmt: "srt", label: `SRT · ${$t.export.subtitle}` },
-      { fmt: "vtt", label: `VTT · ${$t.export.subtitle}` },
-      { fmt: "docx", label: `DOCX · ${$t.export.document}` },
-      { fmt: "pdf", label: `PDF · ${$t.export.document}` },
-    ];
-    // Inclui codificação nos formatos que a suportam (tabela/documento, não legenda).
-    return fmts.map(({ fmt, label }) => ({
-      label,
+    return TRANSCRIPT_FORMATS.map(({ fmt, kind, supportsCoding }) => ({
+      label: `${fmt.toUpperCase()} · ${$t.export[kind]}`,
       run: () =>
-        exportApi.audioTranscript(audioId, fmt, {
-          coding: fmt !== "srt" && fmt !== "vtt",
-        }),
+        exportApi.audioTranscript(audioId, fmt, { coding: supportsCoding }),
     }));
   }
 
