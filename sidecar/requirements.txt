@@ -11,13 +11,15 @@ psutil==6.*
 # Wheels costumam existir para Python 3.10–3.12; em 3.14 pode faltar suporte.
 faster-whisper==1.*
 
-# --- Análise quantitativa/qualitativa ---
-pandas==2.*
-numpy==2.*
-
 # --- Análise de sentimento PT-BR ---
-# pysentimiento traz modelos PT/EN/ES para sentimento e emoção.
+# pysentimiento traz modelos PT/EN/ES para sentimento e emoção (puxa
+# torch/transformers — sem wheels para 3.14, daí a venv .venv312 em Python 3.12).
 pysentimiento==0.7.*
+
+# numpy é dependência transitiva de faster-whisper/torch; fixamos a major para
+# evitar quebras. As análises quantitativa/qualitativa são em Python puro (sem
+# pandas).
+numpy==2.*
 
 # --- Exportação ---
 python-docx==1.*
