@@ -104,6 +104,13 @@ const es: Translation = {
     words: "palabras",
     noCoding: "Aún no hay fragmentos codificados.",
     needTranscription: "Este audio aún no ha sido transcrito.",
+    positive: "Positivo",
+    negative: "Negativo",
+    neutral: "Neutro",
+    avgPolarity: "Polaridad media",
+    avgPolarityHint: "P(positivo) − P(negativo), de −1 a +1.",
+    sentimentTimeline: "Línea de tiempo",
+    sentimentTimelineHint: "Fragmentos con mayor carga emocional.",
   },
   settings: {
     title: "Configuración",

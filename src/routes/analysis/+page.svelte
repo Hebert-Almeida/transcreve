@@ -4,6 +4,7 @@
   import PageHeader from "$lib/components/PageHeader.svelte";
   import QualitativeCoding from "$lib/components/QualitativeCoding.svelte";
   import QuantitativeAnalysis from "$lib/components/QuantitativeAnalysis.svelte";
+  import SentimentAnalysis from "$lib/components/SentimentAnalysis.svelte";
   import { projects as projectApi, type Project } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
 
@@ -66,8 +67,8 @@
       <QuantitativeAnalysis projectId={$selectedProjectId} />
     {/key}
   {:else}
-    <div class="rounded-[var(--radius-app)] border border-dashed border-[var(--color-border)] px-8 py-16 text-center text-sm text-[var(--color-content-muted)]">
-      {$t.common.loading}
-    </div>
+    {#key $selectedProjectId}
+      <SentimentAnalysis projectId={$selectedProjectId} />
+    {/key}
   {/if}
 </section>

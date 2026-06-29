@@ -104,6 +104,13 @@ const en: Translation = {
     words: "words",
     noCoding: "No coded segments yet.",
     needTranscription: "This audio has not been transcribed yet.",
+    positive: "Positive",
+    negative: "Negative",
+    neutral: "Neutral",
+    avgPolarity: "Average polarity",
+    avgPolarityHint: "P(positive) − P(negative), from −1 to +1.",
+    sentimentTimeline: "Timeline",
+    sentimentTimelineHint: "Most emotionally charged segments.",
   },
   settings: {
     title: "Settings",

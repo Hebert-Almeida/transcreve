@@ -102,6 +102,13 @@ const ptBR = {
     words: "palavras",
     noCoding: "Nenhum trecho codificado ainda.",
     needTranscription: "Este áudio ainda não foi transcrito.",
+    positive: "Positivo",
+    negative: "Negativo",
+    neutral: "Neutro",
+    avgPolarity: "Polaridade média",
+    avgPolarityHint: "P(positivo) − P(negativo), de −1 a +1.",
+    sentimentTimeline: "Linha do tempo",
+    sentimentTimelineHint: "Trechos mais marcados emocionalmente.",
   },
   settings: {
     title: "Configurações",
