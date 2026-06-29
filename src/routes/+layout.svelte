@@ -1,10 +1,22 @@
 <script lang="ts">
   import "../app.css";
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { t, locale, setLocale, LOCALES, LOCALE_LABELS, type Locale } from "$lib/i18n";
   import { theme, setTheme, type ThemeMode } from "$lib/stores/theme";
+  import { sidecarStatus, startMonitoring } from "$lib/sidecar/status";
 
   let { children } = $props();
+
+  onMount(() => startMonitoring());
+
+  const statusColor = $derived(
+    $sidecarStatus === "online"
+      ? "bg-emerald-500"
+      : $sidecarStatus === "offline"
+        ? "bg-red-500"
+        : "bg-amber-400",
+  );
 
   const nav = $derived([
     { href: "/", key: "projects", label: $t.nav.projects },
@@ -56,6 +68,18 @@
         </a>
       {/each}
     </nav>
+
+    <!-- Status do sidecar (backend local) -->
+    <div class="flex items-center gap-2 border-t border-[var(--color-border)] px-4 py-2">
+      <span class="h-2 w-2 rounded-full {statusColor}"></span>
+      <span class="text-xs text-[var(--color-content-muted)]">
+        {$sidecarStatus === "online"
+          ? "Motor pronto"
+          : $sidecarStatus === "offline"
+            ? "Motor indisponível"
+            : "Conectando…"}
+      </span>
+    </div>
 
     <!-- Rodapé: tema + idioma -->
     <div class="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-3 py-3">

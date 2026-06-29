@@ -5,6 +5,22 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "shell:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "../sidecar/.venv/Scripts/python.exe",
+          "cmd": "../sidecar/.venv/Scripts/python.exe",
+          "args": true
+        },
+        {
+          "name": "../sidecar/.venv/bin/python",
+          "cmd": "../sidecar/.venv/bin/python",
+          "args": true
+        }
+      ]
+    }
   ]
 }
