@@ -320,12 +320,18 @@ def sentiment_analysis(project_id: int, refresh: bool = False):
 # --- Exportação ----------------------------------------------------------
 
 
-def _download(export) -> Response:
-    """Embrulha um `Export` numa resposta de download (Content-Disposition)."""
-    # RFC 5987 para nomes com acento; filename ASCII simples como fallback.
-    disposition = (
-        f"attachment; filename*=UTF-8''{quote(export.filename)}"
-    )
+def _download(make_export) -> Response:
+    """Roda o exportador e embrulha o `Export` numa resposta de download.
+
+    `make_export` é a chamada (sem argumentos) que produz o `Export`. Formato/tipo
+    de análise inválidos viram `ValueError` → 400; o resto vira anexo com
+    Content-Disposition (RFC 5987 para nomes com acento).
+    """
+    try:
+        export = make_export()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    disposition = f"attachment; filename*=UTF-8''{quote(export.filename)}"
     return Response(
         content=export.content,
         media_type=export.media_type,
@@ -340,11 +346,9 @@ def export_audio_transcript(audio_id: int, fmt: str, coding: bool = False):
         raise HTTPException(404, "Áudio não encontrado")
     from export.transcript import export_transcript
 
-    try:
-        export = export_transcript(fmt, audio_id=audio_id, include_coding=coding)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    return _download(export)
+    return _download(
+        lambda: export_transcript(fmt, audio_id=audio_id, include_coding=coding)
+    )
 
 
 @app.get("/projects/{project_id}/export/{fmt}")
@@ -354,11 +358,9 @@ def export_project_transcript(project_id: int, fmt: str, coding: bool = False):
         raise HTTPException(404, "Projeto não encontrado")
     from export.transcript import export_transcript
 
-    try:
-        export = export_transcript(fmt, project_id=project_id, include_coding=coding)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    return _download(export)
+    return _download(
+        lambda: export_transcript(fmt, project_id=project_id, include_coding=coding)
+    )
 
 
 @app.get("/projects/{project_id}/analysis/{kind}/export/{fmt}")
@@ -368,11 +370,7 @@ def export_project_analysis(project_id: int, kind: str, fmt: str):
         raise HTTPException(404, "Projeto não encontrado")
     from export.analysis import export_analysis
 
-    try:
-        export = export_analysis(kind, fmt, project_id=project_id)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc))
-    return _download(export)
+    return _download(lambda: export_analysis(kind, fmt, project_id=project_id))
 
 
 # --- Transcrição ---------------------------------------------------------
