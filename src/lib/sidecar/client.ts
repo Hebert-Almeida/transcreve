@@ -350,6 +350,109 @@ export const analysis = {
     ),
 };
 
+// --- Exportação ---------------------------------------------------------
+
+/** Formatos de exportação de transcrição. */
+export type TranscriptFormat =
+  | "csv"
+  | "tsv"
+  | "json"
+  | "srt"
+  | "vtt"
+  | "docx"
+  | "pdf";
+
+/** Formatos de exportação de resultado de análise. */
+export type AnalysisExportFormat = "csv" | "tsv" | "json";
+
+/** Análises exportáveis. */
+export type AnalysisKind = "quantitative" | "sentiment";
+
+/** Extensões oferecidas no diálogo "Salvar como", por formato. */
+const EXPORT_EXTENSIONS: Record<string, string> = {
+  csv: "csv",
+  tsv: "tsv",
+  json: "json",
+  srt: "srt",
+  vtt: "vtt",
+  docx: "docx",
+  pdf: "pdf",
+};
+
+/**
+ * Baixa os bytes de uma exportação do sidecar, abre o diálogo "Salvar como" e
+ * grava no caminho escolhido. Devolve o caminho salvo, ou `null` se o usuário
+ * cancelar. O sidecar é a fonte dos bytes; o frontend só escolhe onde gravar.
+ */
+async function downloadExport(
+  path: string,
+  suggestedName: string,
+  ext: string,
+): Promise<string | null> {
+  const url = await baseUrl();
+  const res = await fetch(`${url}${path}`);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const data = await res.json();
+      if (data && typeof data.detail === "string") detail = data.detail;
+    } catch {
+      /* corpo não-JSON */
+    }
+    throw new SidecarError(res.status, detail, path);
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const target = await save({
+    defaultPath: suggestedName,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (!target) return null; // usuário cancelou
+
+  const { writeFile } = await import("@tauri-apps/plugin-fs");
+  await writeFile(target, bytes);
+  return target;
+}
+
+export const exports = {
+  /** Exporta a transcrição de um áudio. */
+  audioTranscript: (
+    audioId: number,
+    fmt: TranscriptFormat,
+    { coding = false }: { coding?: boolean } = {},
+  ) =>
+    downloadExport(
+      `/audios/${audioId}/export/${fmt}${coding ? "?coding=true" : ""}`,
+      `transcricao.${EXPORT_EXTENSIONS[fmt]}`,
+      EXPORT_EXTENSIONS[fmt],
+    ),
+
+  /** Exporta a transcrição de todos os áudios do projeto. */
+  projectTranscript: (
+    projectId: number,
+    fmt: TranscriptFormat,
+    { coding = false }: { coding?: boolean } = {},
+  ) =>
+    downloadExport(
+      `/projects/${projectId}/export/${fmt}${coding ? "?coding=true" : ""}`,
+      `transcricao.${EXPORT_EXTENSIONS[fmt]}`,
+      EXPORT_EXTENSIONS[fmt],
+    ),
+
+  /** Exporta o resultado de uma análise do projeto. */
+  analysis: (
+    projectId: number,
+    kind: AnalysisKind,
+    fmt: AnalysisExportFormat,
+  ) =>
+    downloadExport(
+      `/projects/${projectId}/analysis/${kind}/export/${fmt}`,
+      `${kind}.${EXPORT_EXTENSIONS[fmt]}`,
+      EXPORT_EXTENSIONS[fmt],
+    ),
+};
+
 // --- Transcrição --------------------------------------------------------
 
 export interface TranscribeRequest {
