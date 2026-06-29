@@ -6,7 +6,7 @@ no sentimento, a linha do tempo trecho a trecho (uma linha por segmento).
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import repository as repo
 
@@ -49,24 +49,23 @@ def _sentiment_table(payload: dict[str, Any]) -> TableExport:
     return TableExport(_SENTIMENT_COLUMNS, list(payload.get("timeline", [])))
 
 
-# kind -> (computa o payload, achata em tabela).
-_KINDS = {
-    "quantitative": _quantitative_table,
-    "sentiment": _sentiment_table,
+def _compute_quantitative(project_id: int) -> dict[str, Any]:
+    from analysis.quantitative import project_metrics
+
+    return project_metrics(project_id)
+
+
+def _compute_sentiment(project_id: int) -> dict[str, Any]:
+    from analysis.sentiment import project_sentiment
+
+    return project_sentiment(project_id)
+
+
+# kind -> (calcula/reaproveita o payload do projeto, achata em tabela).
+_KINDS: dict[str, tuple[Callable[[int], dict[str, Any]], Callable[..., TableExport]]] = {
+    "quantitative": (_compute_quantitative, _quantitative_table),
+    "sentiment": (_compute_sentiment, _sentiment_table),
 }
-
-
-def _compute(kind: str, project_id: int) -> dict[str, Any]:
-    """Calcula (ou reaproveita o cache) o payload da análise do projeto."""
-    if kind == "quantitative":
-        from analysis.quantitative import project_metrics
-
-        return project_metrics(project_id)
-    if kind == "sentiment":
-        from analysis.sentiment import project_sentiment
-
-        return project_sentiment(project_id)
-    raise ValueError(f"Análise desconhecida: {kind}")
 
 
 def export_analysis(kind: str, fmt: str, *, project_id: int) -> Export:
@@ -78,7 +77,8 @@ def export_analysis(kind: str, fmt: str, *, project_id: int) -> Export:
     if kind not in _KINDS:
         raise ValueError(f"Análise desconhecida: {kind}")
 
-    payload = _compute(kind, project_id)
+    compute, flatten = _KINDS[kind]
+    payload = compute(project_id)
     project = repo.get_project(project_id)
     title = project["name"] if project else f"projeto-{project_id}"
     base = f"{slugify(title)}-{kind}"
@@ -86,7 +86,7 @@ def export_analysis(kind: str, fmt: str, *, project_id: int) -> Export:
     if fmt == "json":
         content: bytes = rows_to_json(payload)
     elif fmt in ("csv", "tsv"):
-        table = _KINDS[kind](payload)
+        table = flatten(payload)
         content = rows_to_csv(table, delimiter="\t" if fmt == "tsv" else ",")
     else:
         raise ValueError(f"Formato de exportação não suportado: {fmt}")
