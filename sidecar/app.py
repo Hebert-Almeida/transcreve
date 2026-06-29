@@ -18,6 +18,12 @@ import sqlite3
 import sys
 from contextlib import asynccontextmanager
 
+# Antes de qualquer import que toque o Hugging Face: aponta o cache embarcado e
+# liga o modo offline quando empacotado (no-op em dev). Ver runtime.configure_offline.
+from runtime import configure_offline
+
+configure_offline()
+
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

@@ -24,3 +24,8 @@ numpy==2.*
 # --- Exportação ---
 python-docx==1.*
 reportlab==4.*
+
+# --- Empacotamento (dev-only) ---
+# Usado só para gerar o binário congelado do sidecar (transcreve-sidecar) via o
+# .spec; não é dependência de runtime. Ver sidecar/transcreve-sidecar.spec.
+pyinstaller==6.*
