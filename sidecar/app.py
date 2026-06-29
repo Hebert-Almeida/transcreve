@@ -5,11 +5,15 @@ Roda em localhost e é gerenciado pelo processo Tauri (spawn/teardown). Expõe a
 transcrição, a persistência (projetos/áudios/segmentos/códigos), as análises e a
 exportação. Nada sai da máquina do usuário.
 
+A porta é definida pelo Tauri (env `TRANSCREVE_PORT`), que reserva uma livre e a
+informa ao frontend; sem a env, cai no padrão 8756 (ex.: rodar à mão).
+
 Execução em desenvolvimento:
     uvicorn app:app --host 127.0.0.1 --port 8756
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 import sys
 from contextlib import asynccontextmanager
@@ -491,7 +495,21 @@ def transcribe_endpoint(req: TranscribeRequest) -> TranscribeResponse:
     )
 
 
+DEFAULT_PORT = 8756
+
+
+def _port() -> int:
+    """Porta do sidecar: `TRANSCREVE_PORT` (injetada pelo Tauri) ou o padrão."""
+    raw = os.environ.get("TRANSCREVE_PORT")
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+    return DEFAULT_PORT
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8756)
+    uvicorn.run(app, host="127.0.0.1", port=_port())

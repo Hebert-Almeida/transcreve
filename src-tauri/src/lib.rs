@@ -1,11 +1,11 @@
 mod sidecar;
 
-use sidecar::SidecarState;
+use sidecar::{SidecarPort, SidecarState};
 
-/// Retorna a porta do sidecar para o frontend montar a URL local.
+/// Retorna a porta (dinâmica) do sidecar para o frontend montar a URL local.
 #[tauri::command]
-fn sidecar_port() -> u16 {
-    sidecar::SIDECAR_PORT
+fn sidecar_port(port: tauri::State<SidecarPort>) -> u16 {
+    *port.0.lock().unwrap()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,6 +16,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(SidecarState::default())
+        .manage(SidecarPort::default())
         .invoke_handler(tauri::generate_handler![sidecar_port])
         .setup(|app| {
             sidecar::spawn(app.handle());
