@@ -2,25 +2,40 @@
 Sidecar do Transcreve — servidor local FastAPI.
 
 Roda em localhost e é gerenciado pelo processo Tauri (spawn/teardown). Expõe a
-transcrição, as análises e a exportação. Nada sai da máquina do usuário.
+transcrição, a persistência (projetos/áudios/segmentos/códigos), as análises e a
+exportação. Nada sai da máquina do usuário.
 
 Execução em desenvolvimento:
     uvicorn app:app --host 127.0.0.1 --port 8756
 """
 from __future__ import annotations
 
+import sqlite3
 import sys
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+import repository as repo
 from config import detect_hardware
+from db import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Cria/migra o banco antes de atender requisições.
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="Transcreve Sidecar",
     description="Serviço local de transcrição e análise de áudios de pesquisa.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # O WebView do Tauri faz preflight CORS. O sidecar só escuta em 127.0.0.1,
@@ -37,6 +52,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(sqlite3.IntegrityError)
+async def integrity_error_handler(request: Request, exc: sqlite3.IntegrityError):
+    """
+    Violação de restrição do banco (UNIQUE, FK) é entrada inválida do cliente,
+    não falha do servidor — responde 409 com JSON em vez de vazar um 500.
+    """
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Conflito de dados", "error": str(exc)},
+    )
 
 
 class HealthResponse(BaseModel):
@@ -72,6 +99,156 @@ def hardware() -> HardwareResponse:
     )
 
 
+# --- Projetos ------------------------------------------------------------
+
+
+class ProjectIn(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+@app.get("/projects")
+def list_projects():
+    return repo.list_projects()
+
+
+@app.post("/projects", status_code=201)
+def create_project(body: ProjectIn):
+    return repo.create_project(body.name, body.description)
+
+
+@app.get("/projects/{project_id}")
+def get_project(project_id: int):
+    project = repo.get_project(project_id)
+    if project is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    return project
+
+
+@app.patch("/projects/{project_id}")
+def update_project(project_id: int, body: ProjectUpdate):
+    project = repo.update_project(project_id, body.name, body.description)
+    if project is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    return project
+
+
+@app.delete("/projects/{project_id}", status_code=204)
+def delete_project(project_id: int):
+    if not repo.delete_project(project_id):
+        raise HTTPException(404, "Projeto não encontrado")
+
+
+# --- Áudios --------------------------------------------------------------
+
+
+class AudioIn(BaseModel):
+    path: str
+    filename: str
+    duration: float | None = None
+    language: str | None = None
+    model: str | None = None
+    device: str | None = None
+
+
+@app.get("/projects/{project_id}/audios")
+def list_audios(project_id: int):
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    return repo.list_audios(project_id)
+
+
+@app.post("/projects/{project_id}/audios", status_code=201)
+def create_audio(project_id: int, body: AudioIn):
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    return repo.create_audio(
+        project_id,
+        body.path,
+        body.filename,
+        duration=body.duration,
+        language=body.language,
+        model=body.model,
+        device=body.device,
+    )
+
+
+@app.get("/audios/{audio_id}")
+def get_audio(audio_id: int):
+    audio = repo.get_audio(audio_id)
+    if audio is None:
+        raise HTTPException(404, "Áudio não encontrado")
+    return audio
+
+
+@app.delete("/audios/{audio_id}", status_code=204)
+def delete_audio(audio_id: int):
+    if not repo.delete_audio(audio_id):
+        raise HTTPException(404, "Áudio não encontrado")
+
+
+@app.get("/audios/{audio_id}/segments")
+def list_segments(audio_id: int):
+    if repo.get_audio(audio_id) is None:
+        raise HTTPException(404, "Áudio não encontrado")
+    return repo.list_segments(audio_id)
+
+
+# --- Códigos / codificação qualitativa ----------------------------------
+
+
+class CodeIn(BaseModel):
+    name: str
+    color: str | None = None
+
+
+class AssignIn(BaseModel):
+    segment_id: int
+    code_id: int
+    memo: str | None = None
+
+
+@app.get("/projects/{project_id}/codes")
+def list_codes(project_id: int):
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    return repo.list_codes(project_id)
+
+
+@app.post("/projects/{project_id}/codes", status_code=201)
+def create_code(project_id: int, body: CodeIn):
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    return repo.create_code(project_id, body.name, body.color)
+
+
+@app.delete("/codes/{code_id}", status_code=204)
+def delete_code(code_id: int):
+    if not repo.delete_code(code_id):
+        raise HTTPException(404, "Código não encontrado")
+
+
+@app.post("/codes/assign", status_code=204)
+def assign_code(body: AssignIn):
+    repo.assign_code(body.segment_id, body.code_id, body.memo)
+
+
+@app.post("/codes/unassign", status_code=204)
+def unassign_code(body: AssignIn):
+    if not repo.unassign_code(body.segment_id, body.code_id):
+        raise HTTPException(404, "Vínculo não encontrado")
+
+
+@app.get("/codes/{code_id}/segments")
+def segments_for_code(code_id: int):
+    return repo.segments_for_code(code_id)
+
+
 # --- Transcrição ---------------------------------------------------------
 
 
@@ -80,6 +257,8 @@ class TranscribeRequest(BaseModel):
     language: str | None = None
     model: str | None = None
     device: str = "auto"
+    # Se informado, o resultado é persistido nesse áudio (segmentos + metadados).
+    audio_id: int | None = None
 
 
 class WordOut(BaseModel):
@@ -112,15 +291,59 @@ def transcribe_endpoint(req: TranscribeRequest) -> TranscribeResponse:
     """
     Transcreve um áudio (caminho local). Síncrono por ora; uma versão com
     progresso em tempo real (WebSocket) virá em seguida.
+
+    Se `audio_id` for informado, persiste os segmentos e atualiza o status/metadados
+    do áudio no banco — fonte única de verdade para a UI e as análises.
     """
     from transcribe import transcribe as run_transcribe
 
-    result = run_transcribe(
-        req.audio_path,
-        language=req.language,
-        model=req.model,
-        device=req.device,  # type: ignore[arg-type]
-    )
+    if req.audio_id is not None:
+        repo.update_audio_status(req.audio_id, "processing")
+
+    try:
+        result = run_transcribe(
+            req.audio_path,
+            language=req.language,
+            model=req.model,
+            device=req.device,  # type: ignore[arg-type]
+        )
+    except Exception:
+        if req.audio_id is not None:
+            repo.update_audio_status(req.audio_id, "error")
+        raise
+
+    if req.audio_id is not None:
+        repo.replace_segments(
+            req.audio_id,
+            [
+                {
+                    "seq": s.id,
+                    "start": s.start,
+                    "end": s.end,
+                    "text": s.text,
+                    "speaker": s.speaker,
+                    "words": [
+                        {
+                            "start": w.start,
+                            "end": w.end,
+                            "word": w.word,
+                            "probability": w.probability,
+                        }
+                        for w in s.words
+                    ],
+                }
+                for s in result.segments
+            ],
+        )
+        repo.update_audio_status(
+            req.audio_id,
+            "done",
+            duration=result.duration,
+            language=result.language,
+            model=result.model,
+            device=result.device,
+        )
+
     return TranscribeResponse(
         language=result.language,
         language_probability=result.language_probability,
