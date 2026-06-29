@@ -18,6 +18,7 @@ src-tauri/gen/
 
 # --- Python sidecar ---
 sidecar/.venv/
+sidecar/.venv312/
 sidecar/venv/
 sidecar/__pycache__/
 **/__pycache__/
