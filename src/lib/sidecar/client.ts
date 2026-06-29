@@ -225,6 +225,46 @@ export interface QuantitativeSummary {
   audios: ProjectAudioMetrics[];
 }
 
+/** Rótulo de sentimento de um trecho. */
+export type SentimentLabel = "positive" | "negative" | "neutral";
+
+/** Contagem de trechos por sentimento. */
+export interface SentimentDistribution {
+  positive: number;
+  negative: number;
+  neutral: number;
+}
+
+/** Distribuição de sentimento de um áudio dentro do agregado do projeto. */
+export interface SentimentByAudio {
+  audio_id: number;
+  filename: string;
+  distribution: SentimentDistribution;
+  /** Polaridade média P(pos) − P(neg) em [-1, 1]. */
+  avg_polarity: number;
+}
+
+/** Um trecho na linha do tempo de sentimento. */
+export interface SentimentPoint {
+  segment_id: number;
+  audio_id: number;
+  start: number;
+  label: SentimentLabel;
+  /** Polaridade do trecho P(pos) − P(neg) em [-1, 1]. */
+  polarity: number;
+  text: string;
+}
+
+/** Resumo de sentimento do projeto, com recorte por áudio e linha do tempo. */
+export interface SentimentSummary {
+  total_segments: number;
+  distribution: SentimentDistribution;
+  /** Polaridade média do projeto em [-1, 1]. */
+  avg_polarity: number;
+  audios: SentimentByAudio[];
+  timeline: SentimentPoint[];
+}
+
 // --- Projetos -----------------------------------------------------------
 
 export const projects = {
@@ -304,6 +344,10 @@ export const analysis = {
     ),
   quantitativeAudio: (audioId: number) =>
     request<AudioMetrics>(`/audios/${audioId}/analysis/quantitative`),
+  sentiment: (projectId: number, refresh = false) =>
+    request<SentimentSummary>(
+      `/projects/${projectId}/analysis/sentiment${refresh ? "?refresh=true" : ""}`,
+    ),
 };
 
 // --- Transcrição --------------------------------------------------------
