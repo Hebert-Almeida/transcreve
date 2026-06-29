@@ -276,6 +276,29 @@ def qualitative_analysis(project_id: int):
     return qualitative_summary(project_id)
 
 
+# --- Análise quantitativa ------------------------------------------------
+
+
+@app.get("/audios/{audio_id}/analysis/quantitative")
+def quantitative_audio_analysis(audio_id: int):
+    """Métricas descritivas de um áudio: palavras, velocidade, riqueza, termos."""
+    if repo.get_audio(audio_id) is None:
+        raise HTTPException(404, "Áudio não encontrado")
+    from analysis.quantitative import audio_metrics
+
+    return audio_metrics(audio_id)
+
+
+@app.get("/projects/{project_id}/analysis/quantitative")
+def quantitative_project_analysis(project_id: int):
+    """Métricas quantitativas agregadas do projeto, com recorte por áudio."""
+    if repo.get_project(project_id) is None:
+        raise HTTPException(404, "Projeto não encontrado")
+    from analysis.quantitative import project_metrics
+
+    return project_metrics(project_id)
+
+
 # --- Transcrição ---------------------------------------------------------
 
 

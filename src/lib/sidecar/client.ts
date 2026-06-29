@@ -179,6 +179,52 @@ export interface QualitativeSummary {
   coverage: number;
 }
 
+export interface TermFrequency {
+  term: string;
+  count: number;
+}
+
+/** Recorte por falante (presente só quando há diarização). */
+export interface SpeakerMetrics {
+  speaker: string | null;
+  word_count: number;
+  spoken_seconds: number;
+  speaking_rate: number;
+}
+
+/** Métricas quantitativas de um áudio transcrito. */
+export interface AudioMetrics {
+  word_count: number;
+  unique_words: number;
+  spoken_seconds: number;
+  speaking_rate: number;
+  lexical_richness: number;
+  top_terms: TermFrequency[];
+  speakers: SpeakerMetrics[];
+}
+
+/** Métricas quantitativas de um áudio dentro do agregado do projeto. */
+export interface ProjectAudioMetrics {
+  audio_id: number;
+  filename: string;
+  word_count: number;
+  unique_words: number;
+  spoken_seconds: number;
+  speaking_rate: number;
+  lexical_richness: number;
+}
+
+/** Métricas quantitativas agregadas do projeto, com recorte por áudio. */
+export interface QuantitativeSummary {
+  word_count: number;
+  unique_words: number;
+  spoken_seconds: number;
+  speaking_rate: number;
+  lexical_richness: number;
+  top_terms: TermFrequency[];
+  audios: ProjectAudioMetrics[];
+}
+
 // --- Projetos -----------------------------------------------------------
 
 export const projects = {
@@ -252,6 +298,12 @@ export const codes = {
 export const analysis = {
   qualitative: (projectId: number) =>
     request<QualitativeSummary>(`/projects/${projectId}/analysis/qualitative`),
+  quantitative: (projectId: number) =>
+    request<QuantitativeSummary>(
+      `/projects/${projectId}/analysis/quantitative`,
+    ),
+  quantitativeAudio: (audioId: number) =>
+    request<AudioMetrics>(`/audios/${audioId}/analysis/quantitative`),
 };
 
 // --- Transcrição --------------------------------------------------------

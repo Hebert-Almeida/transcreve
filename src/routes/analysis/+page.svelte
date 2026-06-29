@@ -3,6 +3,7 @@
   import { t } from "$lib/i18n";
   import PageHeader from "$lib/components/PageHeader.svelte";
   import QualitativeCoding from "$lib/components/QualitativeCoding.svelte";
+  import QuantitativeAnalysis from "$lib/components/QuantitativeAnalysis.svelte";
   import { projects as projectApi, type Project } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
 
@@ -59,6 +60,10 @@
   {:else if tab === "qualitative"}
     {#key $selectedProjectId}
       <QualitativeCoding projectId={$selectedProjectId} />
+    {/key}
+  {:else if tab === "quantitative"}
+    {#key $selectedProjectId}
+      <QuantitativeAnalysis projectId={$selectedProjectId} />
     {/key}
   {:else}
     <div class="rounded-[var(--radius-app)] border border-dashed border-[var(--color-border)] px-8 py-16 text-center text-sm text-[var(--color-content-muted)]">
