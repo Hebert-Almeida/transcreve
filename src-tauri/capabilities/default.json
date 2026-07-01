@@ -8,21 +8,6 @@
     "opener:default",
     "dialog:default",
     "fs:allow-write-file",
-    "shell:allow-open",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "../sidecar/.venv312/Scripts/python.exe",
-          "cmd": "../sidecar/.venv312/Scripts/python.exe",
-          "args": true
-        },
-        {
-          "name": "../sidecar/.venv312/bin/python",
-          "cmd": "../sidecar/.venv312/bin/python",
-          "args": true
-        }
-      ]
-    }
+    "shell:allow-open"
   ]
 }

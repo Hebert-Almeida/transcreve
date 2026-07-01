@@ -1,19 +1,24 @@
 //! Gerência do sidecar Python (FastAPI).
 //!
 //! Em desenvolvimento, executa o interpretador do venv (`sidecar/.venv312`).
-//! Em produção, executa o binário embarcado via `externalBin` (PyInstaller).
+//! Em produção, executa o binário congelado (PyInstaller onedir) empacotado como
+//! `resource` do Tauri: o exe fica em `resources/binaries/` ao lado da pasta
+//! `_internal/` (que o PyInstaller exige como irmã). Por isso NÃO usamos o
+//! `externalBin`/`.sidecar()` (que empacota um único arquivo) — resolvemos o
+//! caminho do exe via `resource_dir()` e o executamos diretamente.
 //!
 //! O Rust reserva uma porta livre e injeta `TRANSCREVE_PORT` e
 //! `TRANSCREVE_DATA_DIR` no ambiente do sidecar; a porta é devolvida ao
 //! frontend pelo comando `sidecar_port`. O processo é encerrado junto com o
 //! app para não deixar órfãos.
 
+use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 use tauri::{Manager, RunEvent};
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
-use tauri_plugin_shell::ShellExt;
 
 /// Porta usada quando não foi possível reservar uma livre (espelha o padrão do
 /// `app.py`). Em condições normais a porta é dinâmica — ver [`pick_free_port`].
@@ -21,7 +26,7 @@ pub const DEFAULT_PORT: u16 = 8756;
 
 /// Guarda o processo filho para podermos encerrá-lo no shutdown.
 #[derive(Default)]
-pub struct SidecarState(pub Mutex<Option<CommandChild>>);
+pub struct SidecarState(pub Mutex<Option<Child>>);
 
 /// Porta efetiva onde o sidecar escuta, resolvida no spawn e devolvida ao
 /// frontend via comando. Fica em estado gerenciado para o `sidecar_port` lê-la.
@@ -52,13 +57,10 @@ fn data_dir(app: &tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-/// Monta o `Command` apropriado para dev (venv) ou produção (binário embarcado),
+/// Monta o `Command` apropriado para dev (venv) ou produção (binário congelado),
 /// injetando a porta e o diretório de dados via variáveis de ambiente.
-fn build_command(
-    app: &tauri::AppHandle,
-    port: u16,
-) -> Result<tauri_plugin_shell::process::Command, String> {
-    let command = if cfg!(debug_assertions) {
+fn build_command(app: &tauri::AppHandle, port: u16) -> Result<Command, String> {
+    let mut command = if cfg!(debug_assertions) {
         // Dev: usa o Python do venv. O cwd do `tauri dev` é `src-tauri`,
         // então `../sidecar` aponta para a pasta do sidecar.
         // Usa a venv 3.12 (`.venv312`): o pysentimiento (torch/transformers)
@@ -68,22 +70,52 @@ fn build_command(
         } else {
             "../sidecar/.venv312/bin/python"
         };
-        app.shell()
-            .command(python)
-            .args(["app.py"])
-            .current_dir(std::path::PathBuf::from("../sidecar"))
+        let mut c = Command::new(python);
+        c.arg("app.py").current_dir("../sidecar");
+        c
     } else {
-        // Produção: binário embarcado (resolvido pelo nome, sem caminho).
-        app.shell()
-            .sidecar("transcreve-sidecar")
-            .map_err(|e| e.to_string())?
+        // Produção: exe congelado empacotado como resource. Resolvemos o caminho
+        // sob o resource_dir e executamos diretamente (o _internal/ irmão vai
+        // junto no bundle). O cwd é a pasta do exe, garantindo que o PyInstaller
+        // localize _internal/ mesmo se algum código usar caminhos relativos.
+        let exe = sidecar_exe_path(app)?;
+        let dir = exe
+            .parent()
+            .ok_or_else(|| "caminho do sidecar sem diretório-pai".to_string())?
+            .to_path_buf();
+        let mut c = Command::new(&exe);
+        c.current_dir(dir);
+        c
     };
 
-    let mut command = command.env("TRANSCREVE_PORT", port.to_string());
+    command
+        .env("TRANSCREVE_PORT", port.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     if let Some(dir) = data_dir(app) {
-        command = command.env("TRANSCREVE_DATA_DIR", dir);
+        command.env("TRANSCREVE_DATA_DIR", dir);
     }
     Ok(command)
+}
+
+/// Caminho do exe congelado dentro dos resources do bundle.
+/// Empacotamos `binaries/` (exe + `_internal/`) como resource no tauri.conf.json,
+/// então o exe fica em `<resource_dir>/binaries/transcreve-sidecar.exe`.
+fn sidecar_exe_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("resource_dir indisponível: {e}"))?;
+    let name = if cfg!(windows) {
+        "transcreve-sidecar.exe"
+    } else {
+        "transcreve-sidecar"
+    };
+    let exe = resource_dir.join("binaries").join(name);
+    if !exe.exists() {
+        return Err(format!("sidecar não encontrado em {}", exe.display()));
+    }
+    Ok(exe)
 }
 
 /// Sobe o sidecar e registra o processo no estado da aplicação.
@@ -91,7 +123,7 @@ pub fn spawn(app: &tauri::AppHandle) {
     let port = pick_free_port();
     *app.state::<SidecarPort>().0.lock().unwrap() = port;
 
-    let command = match build_command(app, port) {
+    let mut command = match build_command(app, port) {
         Ok(c) => c,
         Err(err) => {
             eprintln!("[sidecar] não foi possível montar o comando: {err}");
@@ -100,37 +132,34 @@ pub fn spawn(app: &tauri::AppHandle) {
     };
 
     match command.spawn() {
-        Ok((mut rx, child)) => {
+        Ok(mut child) => {
+            // Encaminha logs do sidecar para o console do app (útil em dev e p/
+            // diagnosticar o bundle). Uma thread por stream, pois são bloqueantes.
+            if let Some(out) = child.stdout.take() {
+                pump_logs("sidecar:out", out);
+            }
+            if let Some(err) = child.stderr.take() {
+                pump_logs("sidecar:err", err);
+            }
             let state = app.state::<SidecarState>();
             *state.0.lock().unwrap() = Some(child);
-
-            let app_handle = app.clone();
-            // Encaminha logs do sidecar para o console do app (útil em dev).
-            tauri::async_runtime::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                    match event {
-                        CommandEvent::Stdout(line) => log_line("sidecar:out", &line),
-                        CommandEvent::Stderr(line) => log_line("sidecar:err", &line),
-                        CommandEvent::Terminated(payload) => {
-                            eprintln!("[sidecar] encerrado: {:?}", payload.code);
-                            let state = app_handle.state::<SidecarState>();
-                            *state.0.lock().unwrap() = None;
-                        }
-                        _ => {}
-                    }
-                }
-            });
         }
         Err(err) => eprintln!("[sidecar] falha ao iniciar: {err}"),
     }
 }
 
-fn log_line(tag: &str, bytes: &[u8]) {
-    let text = String::from_utf8_lossy(bytes);
-    let text = text.trim_end();
-    if !text.is_empty() {
-        println!("[{tag}] {text}");
-    }
+/// Lê linhas de um stream do filho numa thread dedicada e as ecoa no console.
+fn pump_logs<R: std::io::Read + Send + 'static>(tag: &'static str, stream: R) {
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stream);
+        for line in reader.lines() {
+            match line {
+                Ok(text) if !text.trim().is_empty() => println!("[{tag}] {text}"),
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+    });
 }
 
 /// Encerra o sidecar (chamado no evento de saída do app).
@@ -138,8 +167,9 @@ pub fn shutdown(app: &tauri::AppHandle) {
     let state = app.state::<SidecarState>();
     // Tira o processo do Mutex e solta o lock antes de matá-lo.
     let child = state.0.lock().unwrap().take();
-    if let Some(child) = child {
+    if let Some(mut child) = child {
         let _ = child.kill();
+        let _ = child.wait();
     }
 }
 
