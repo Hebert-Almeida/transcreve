@@ -95,7 +95,24 @@ fn build_command(app: &tauri::AppHandle, port: u16) -> Result<Command, String> {
     if let Some(dir) = data_dir(app) {
         command.env("TRANSCREVE_DATA_DIR", dir);
     }
+    // Em produção, informa ao sidecar onde está o cache de modelos (2,5 GB) que
+    // é entregue AO LADO do app (fora do instalador, por limite de tamanho). O
+    // sidecar copia daí para o app-data no 1º boot (ver runtime.py).
+    if !cfg!(debug_assertions) {
+        if let Some(models) = models_source_dir(app) {
+            command.env("TRANSCREVE_MODELS_DIR", models);
+        }
+    }
     Ok(command)
+}
+
+/// Pasta de modelos entregue junto do app instalado (`<resource>/binaries/models`).
+/// Não é empacotada no instalador (estoura o teto), então é copiada para lá na
+/// distribuição. Se ausente, o sidecar recorre ao que já houver em app-data.
+fn models_source_dir(app: &tauri::AppHandle) -> Option<String> {
+    let resource_dir = app.path().resource_dir().ok()?;
+    let models = resource_dir.join("binaries").join("models");
+    Some(models.to_string_lossy().into_owned())
 }
 
 /// Caminho do exe congelado dentro dos resources do bundle.

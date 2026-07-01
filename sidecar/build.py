@@ -22,9 +22,10 @@ from pathlib import Path
 SIDECAR_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SIDECAR_DIR.parent
 DIST_DIR = SIDECAR_DIR / "dist" / "transcreve-sidecar"
-# Em onedir, sys._MEIPASS aponta para _internal/; runtime.bundled_hf_home() =
-# <_MEIPASS>/models, e o HF espera models/hub/ dentro dele.
-MODELS_DEST = DIST_DIR / "_internal" / "models" / "hub"
+# Os modelos ficam AO LADO do exe (não dentro de _internal): 2,5 GB estouram o
+# teto dos instaladores. runtime.source_models_dir() = <exe_dir>/models e o HF
+# espera models/hub/ dentro. No 1º boot o runtime copia p/ app-data.
+MODELS_DEST = DIST_DIR / "models" / "hub"
 HF_HUB = Path.home() / ".cache" / "huggingface" / "hub"
 BIN_DIR = REPO_ROOT / "src-tauri" / "binaries"
 
