@@ -48,9 +48,21 @@ fn pick_free_port() -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-/// Diretório de dados do app (`app_data_dir`), passado ao sidecar para que o
-/// banco e os áudios caiam na pasta canônica por SO, não no APPDATA cru.
+/// Diretório de dados do app, passado ao sidecar para o banco e os áudios.
+///
+/// Em produção, os dados ficam AO LADO do app instalado (`<pasta do exe>\data`):
+/// assim tudo (programa, modelos e dados do usuário) mora no mesmo disco que o
+/// usuário escolheu no instalador — sem prender nada ao C:\...\Roaming. A pasta
+/// é gravável e persiste entre execuções; o instalador não a apaga ao remover.
+/// Em dev usamos o `app_data_dir` canônico (não há "pasta do exe" instalada).
 fn data_dir(app: &tauri::AppHandle) -> Option<String> {
+    if !cfg!(debug_assertions) {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                return Some(dir.join("data").to_string_lossy().into_owned());
+            }
+        }
+    }
     app.path()
         .app_data_dir()
         .ok()

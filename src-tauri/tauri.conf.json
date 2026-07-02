@@ -36,6 +36,12 @@
     "resources": [
       "binaries/transcreve-sidecar.exe",
       "binaries/_internal/**/*"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerIcon": "icons/icon.ico"
+      }
+    }
   }
 }
