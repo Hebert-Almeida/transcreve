@@ -8,7 +8,6 @@
   import {
     projects as projectApi,
     audios as audioApi,
-    transcribe,
     exports as exportApi,
     TRANSCRIPT_FORMATS,
     type Project,
@@ -17,13 +16,22 @@
   } from "$lib/sidecar/client";
   import { selectedProjectId } from "$lib/stores/selection";
   import { model, device } from "$lib/stores/settings";
+  import { activeTranscriptions, startTranscription } from "$lib/stores/transcription";
 
   let projects = $state<Project[]>([]);
   let audios = $state<Audio[]>([]);
   let selectedAudio = $state<Audio | null>(null);
   let segments = $state<Segment[]>([]);
   let error = $state<string | null>(null);
-  let busyAudioId = $state<number | null>(null); // áudio em transcrição
+
+  // Estado "em transcrição" vem do store global (sobrevive à troca de aba):
+  // um áudio está travado enquanto estiver no mapa; a fração alimenta a barra.
+  function isBusy(id: number): boolean {
+    return $activeTranscriptions.has(id);
+  }
+  function progressOf(id: number): number | null | undefined {
+    return $activeTranscriptions.get(id)?.fraction;
+  }
 
   // Carrega projetos para o seletor; reage à mudança de projeto selecionado.
   onMount(async () => {
@@ -86,35 +94,37 @@
     }
   }
 
-  async function runTranscription(audio: Audio) {
+  function runTranscription(audio: Audio) {
     error = null;
-    busyAudioId = audio.id;
     // Otimista: marca como processando na lista.
     patchAudio(audio.id, { status: "processing" });
-    try {
-      const result = await transcribe({
-        audio_path: audio.path,
-        audio_id: audio.id,
-        model: $model,
-        device: $device,
-      });
-      segments = result.segments.map((s) => ({ ...s, audio_id: audio.id }));
-      patchAudio(audio.id, {
-        status: "done",
-        duration: result.duration,
-        language: result.language,
-        model: result.model,
-        device: result.device,
-      });
-      if (selectedAudio?.id === audio.id) {
-        selectedAudio = { ...selectedAudio, status: "done" };
-      }
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-      patchAudio(audio.id, { status: "error" });
-    } finally {
-      busyAudioId = null;
-    }
+    // Delega ao store global — a transcrição continua mesmo se sairmos da aba.
+    // Os callbacks reconciliam o estado local (lista + painel) ao concluir; se
+    // o usuário estiver noutra aba, o servidor persiste do mesmo jeito e o
+    // $effect recarrega do banco ao voltar.
+    void startTranscription(
+      audio,
+      { model: $model, device: $device },
+      {
+        onDone: (result) => {
+          patchAudio(audio.id, {
+            status: "done",
+            duration: result.duration,
+            language: result.language,
+            model: result.model,
+            device: result.device,
+          });
+          if (selectedAudio?.id === audio.id) {
+            selectedAudio = { ...selectedAudio, status: "done" };
+            segments = result.segments.map((s) => ({ ...s, audio_id: audio.id }));
+          }
+        },
+        onError: (message) => {
+          patchAudio(audio.id, { status: "error" });
+          if (selectedAudio?.id === audio.id) error = message;
+        },
+      },
+    );
   }
 
   function patchAudio(id: number, patch: Partial<Audio>) {
@@ -207,7 +217,10 @@
                   onclick={() => selectAudio(audio)}
                 >
                   <span class="block truncate font-medium">{audio.filename}</span>
-                  <span class="text-xs text-[var(--color-content-muted)]">
+                  <span class="flex items-center gap-1.5 text-xs text-[var(--color-content-muted)]">
+                    {#if isBusy(audio.id)}
+                      <span class="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent"></span>
+                    {/if}
                     {statusLabel(audio.status)}
                     {#if audio.duration}· {formatDuration(audio.duration)}{/if}
                   </span>
@@ -245,8 +258,8 @@
                 <ExportMenu options={audioExportOptions(selectedAudio.id)} />
               {/if}
               <button
-                class="rounded-[var(--radius-app)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-content)] hover:opacity-90 disabled:opacity-50"
-                disabled={busyAudioId === selectedAudio.id}
+                class="rounded-[var(--radius-app)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-content)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isBusy(selectedAudio.id)}
                 onclick={() => runTranscription(selectedAudio!)}
               >
                 {selectedAudio.status === "done"
@@ -256,10 +269,36 @@
             </div>
           </div>
 
-          {#if busyAudioId === selectedAudio.id}
-            <div class="flex items-center gap-3 rounded-[var(--radius-app)] border border-[var(--color-border)] px-4 py-6 text-sm text-[var(--color-content-muted)]">
-              <span class="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent"></span>
-              {$t.transcription.transcribing}
+          {#if isBusy(selectedAudio.id)}
+            {@const fraction = progressOf(selectedAudio.id)}
+            <div class="rounded-[var(--radius-app)] border border-[var(--color-border)] px-4 py-6">
+              <div class="mb-3 flex items-center justify-between text-sm text-[var(--color-content-muted)]">
+                <span class="flex items-center gap-2">
+                  {#if fraction == null}
+                    <span class="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent"></span>
+                    {$t.transcription.preparingModel}
+                  {:else}
+                    {$t.transcription.transcribing}
+                  {/if}
+                </span>
+                {#if fraction != null}
+                  <span class="tabular-nums font-medium text-[var(--color-content)]">
+                    {Math.round(fraction * 100)}%
+                  </span>
+                {/if}
+              </div>
+              <!-- Trilha da barra: determinada (largura = fração) ou indeterminada
+                   (listra animada) enquanto o modelo carrega. -->
+              <div class="h-2 w-full overflow-hidden rounded-full bg-[var(--color-surface-muted)]">
+                {#if fraction == null}
+                  <div class="progress-indeterminate h-full w-1/3 rounded-full bg-[var(--color-accent)]"></div>
+                {:else}
+                  <div
+                    class="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-300 ease-out"
+                    style="width: {Math.round(fraction * 100)}%"
+                  ></div>
+                {/if}
+              </div>
             </div>
           {:else if segments.length > 0}
             <article class="rounded-[var(--radius-app)] border border-[var(--color-border)] p-6 text-[15px]">
@@ -277,3 +316,19 @@
     </div>
   {/if}
 </section>
+
+<style>
+  /* Barra indeterminada: uma listra desliza da esquerda p/ a direita enquanto o
+     modelo carrega (fração ainda desconhecida). */
+  @keyframes progress-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
+    }
+  }
+  .progress-indeterminate {
+    animation: progress-indeterminate 1.2s ease-in-out infinite;
+  }
+</style>

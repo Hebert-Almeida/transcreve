@@ -57,7 +57,8 @@ const en: Translation = {
     duration: "Duration",
     copyText: "Copy text",
     copied: "Copied!",
-    transcribing: "Transcribing… this may take a few minutes.",
+    transcribing: "Transcribing…",
+    preparingModel: "Preparing model…",
     status: {
       idle: "Idle",
       pending: "Pending",

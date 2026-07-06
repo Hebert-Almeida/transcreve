@@ -13,9 +13,12 @@ Execução em desenvolvimento:
 """
 from __future__ import annotations
 
+import json
 import os
+import queue
 import sqlite3
 import sys
+import threading
 from contextlib import asynccontextmanager
 
 # Antes de qualquer import que toque o Hugging Face: aponta o cache embarcado e
@@ -26,7 +29,7 @@ configure_offline()
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from urllib.parse import quote
 from pydantic import BaseModel
 
@@ -395,110 +398,142 @@ class TranscribeRequest(BaseModel):
     audio_id: int | None = None
 
 
-class WordOut(BaseModel):
-    start: float
-    end: float
-    word: str
-    probability: float | None = None
+# O endpoint /transcribe responde em NDJSON (stream), então não há um response_model
+# Pydantic: o payload final ("done") é montado como dict em `_result_payload`, com a
+# mesma forma que o antigo TranscribeResponse (language, duration, model, device,
+# segments[].words[]). O cliente TypeScript conhece esse formato.
+def _result_payload(result) -> dict:
+    """Monta o dicionário do evento `done` (language/duration/model/device/segments)."""
+    return {
+        "type": "done",
+        "language": result.language,
+        "language_probability": result.language_probability,
+        "duration": result.duration,
+        "model": result.model,
+        "device": result.device,
+        "segments": [
+            {
+                "id": s.id,
+                "start": s.start,
+                "end": s.end,
+                "text": s.text,
+                "speaker": s.speaker,
+                "words": [
+                    {
+                        "start": w.start,
+                        "end": w.end,
+                        "word": w.word,
+                        "probability": w.probability,
+                    }
+                    for w in s.words
+                ],
+            }
+            for s in result.segments
+        ],
+    }
 
 
-class SegmentOut(BaseModel):
-    id: int
-    start: float
-    end: float
-    text: str
-    speaker: str | None = None
-    words: list[WordOut] = []
+def _persist_result(audio_id: int, result) -> None:
+    """Grava segmentos + metadados do áudio (fonte de verdade p/ UI e análises)."""
+    repo.replace_segments(
+        audio_id,
+        [
+            {
+                "seq": s.id,
+                "start": s.start,
+                "end": s.end,
+                "text": s.text,
+                "speaker": s.speaker,
+                "words": [
+                    {
+                        "start": w.start,
+                        "end": w.end,
+                        "word": w.word,
+                        "probability": w.probability,
+                    }
+                    for w in s.words
+                ],
+            }
+            for s in result.segments
+        ],
+    )
+    repo.update_audio_status(
+        audio_id,
+        "done",
+        duration=result.duration,
+        language=result.language,
+        model=result.model,
+        device=result.device,
+    )
 
 
-class TranscribeResponse(BaseModel):
-    language: str
-    language_probability: float
-    duration: float
-    model: str
-    device: str
-    segments: list[SegmentOut]
-
-
-@app.post("/transcribe", response_model=TranscribeResponse)
-def transcribe_endpoint(req: TranscribeRequest) -> TranscribeResponse:
+@app.post("/transcribe")
+def transcribe_endpoint(req: TranscribeRequest) -> StreamingResponse:
     """
-    Transcreve um áudio (caminho local). Síncrono por ora; uma versão com
-    progresso em tempo real (WebSocket) virá em seguida.
+    Transcreve um áudio (caminho local) transmitindo o progresso em tempo real.
+
+    A resposta é um stream NDJSON (`application/x-ndjson`), uma linha por evento:
+      - {"type": "progress", "fraction": 0..1}  — a cada segmento reconhecido;
+      - {"type": "done", ...}                    — payload final (idêntico ao
+        antigo TranscribeResponse: language, duration, model, device, segments);
+      - {"type": "error", "detail": "..."}       — em caso de falha.
 
     Se `audio_id` for informado, persiste os segmentos e atualiza o status/metadados
-    do áudio no banco — fonte única de verdade para a UI e as análises.
+    do áudio no banco — fonte única de verdade para a UI e as análises. Essa escrita
+    ocorre no servidor independentemente do cliente, então a transcrição "sobrevive"
+    a navegações/fechar a aba no frontend.
+
+    Implementação: a transcrição (bloqueante) roda numa thread; o callback
+    `on_progress` empurra as frações numa fila que o gerador do stream drena e
+    serializa. Assim o event loop não bloqueia e o progresso flui por segmento.
     """
     from transcribe import transcribe as run_transcribe
 
     if req.audio_id is not None:
         repo.update_audio_status(req.audio_id, "processing")
 
-    try:
-        result = run_transcribe(
-            req.audio_path,
-            language=req.language,
-            model=req.model,
-            device=req.device,  # type: ignore[arg-type]
-        )
-    except Exception:
-        if req.audio_id is not None:
-            repo.update_audio_status(req.audio_id, "error")
-        raise
+    events: queue.Queue[dict] = queue.Queue()
 
-    if req.audio_id is not None:
-        repo.replace_segments(
-            req.audio_id,
-            [
-                {
-                    "seq": s.id,
-                    "start": s.start,
-                    "end": s.end,
-                    "text": s.text,
-                    "speaker": s.speaker,
-                    "words": [
-                        {
-                            "start": w.start,
-                            "end": w.end,
-                            "word": w.word,
-                            "probability": w.probability,
-                        }
-                        for w in s.words
-                    ],
-                }
-                for s in result.segments
-            ],
-        )
-        repo.update_audio_status(
-            req.audio_id,
-            "done",
-            duration=result.duration,
-            language=result.language,
-            model=result.model,
-            device=result.device,
-        )
-
-    return TranscribeResponse(
-        language=result.language,
-        language_probability=result.language_probability,
-        duration=result.duration,
-        model=result.model,
-        device=result.device,
-        segments=[
-            SegmentOut(
-                id=s.id,
-                start=s.start,
-                end=s.end,
-                text=s.text,
-                speaker=s.speaker,
-                words=[
-                    WordOut(start=w.start, end=w.end, word=w.word, probability=w.probability)
-                    for w in s.words
-                ],
+    def worker() -> None:
+        # Roda a transcrição e alimenta a fila. O sentinela é o próprio evento
+        # terminal (done/error), após o qual o gerador encerra.
+        try:
+            result = run_transcribe(
+                req.audio_path,
+                language=req.language,
+                model=req.model,
+                device=req.device,  # type: ignore[arg-type]
+                on_progress=lambda _seg, fraction: events.put(
+                    {"type": "progress", "fraction": fraction}
+                ),
             )
-            for s in result.segments
-        ],
-    )
+        except Exception as exc:  # noqa: BLE001 — o erro é reportado ao cliente
+            if req.audio_id is not None:
+                repo.update_audio_status(req.audio_id, "error")
+            events.put({"type": "error", "detail": str(exc)})
+            return
+
+        if req.audio_id is not None:
+            try:
+                _persist_result(req.audio_id, result)
+            except Exception as exc:  # noqa: BLE001
+                repo.update_audio_status(req.audio_id, "error")
+                events.put({"type": "error", "detail": str(exc)})
+                return
+
+        events.put(_result_payload(result))
+
+    def stream():
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+        while True:
+            event = events.get()
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+            if event["type"] in ("done", "error"):
+                break
+        thread.join()
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
 
 
 DEFAULT_PORT = 8756

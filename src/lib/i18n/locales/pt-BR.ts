@@ -55,7 +55,8 @@ const ptBR = {
     duration: "Duração",
     copyText: "Copiar texto",
     copied: "Copiado!",
-    transcribing: "Transcrevendo… isso pode levar alguns minutos.",
+    transcribing: "Transcrevendo…",
+    preparingModel: "Preparando modelo…",
     status: {
       idle: "Aguardando",
       pending: "Pendente",

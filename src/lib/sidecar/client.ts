@@ -470,12 +470,81 @@ export interface TranscribeResponse {
   segments: Segment[];
 }
 
-/** Dispara a transcrição (síncrona por ora). */
-export function transcribe(
+/**
+ * Dispara a transcrição, transmitindo o progresso em tempo real.
+ *
+ * O sidecar responde em NDJSON (uma linha JSON por evento): `progress` (fração
+ * 0..1, por segmento), `done` (o resultado completo) ou `error`. Lemos o stream
+ * incrementalmente, chamando `onProgress` a cada fração, e resolvemos com o
+ * `TranscribeResponse` no evento `done`. Em `error`, lançamos `SidecarError`.
+ *
+ * A escrita no banco acontece no servidor (quando há `audio_id`), então mesmo
+ * que o chamador não aguarde/navegue para longe, a transcrição é persistida.
+ */
+export async function transcribe(
   req: TranscribeRequest,
+  onProgress?: (fraction: number) => void,
 ): Promise<TranscribeResponse> {
-  return request<TranscribeResponse>("/transcribe", {
+  const path = "/transcribe";
+  const res = await fetchOrThrow(path, {
     method: "POST",
-    body: req,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
   });
+  if (!res.body) {
+    throw new SidecarError(res.status, "resposta sem corpo (stream)", path);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: TranscribeResponse | undefined;
+
+  // Processa uma linha NDJSON completa. Retorna true quando chegou o evento
+  // terminal `done` (com `result` já preenchido); lança `SidecarError` em `error`.
+  const handleLine = (line: string): boolean => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    const event = JSON.parse(trimmed) as
+      | { type: "progress"; fraction: number }
+      | ({ type: "done" } & TranscribeResponse)
+      | { type: "error"; detail: string };
+    if (event.type === "progress") {
+      onProgress?.(event.fraction);
+      return false;
+    }
+    if (event.type === "error") {
+      throw new SidecarError(res.status, event.detail, path);
+    }
+    // done: o próprio evento carrega o TranscribeResponse (menos o campo `type`).
+    const { type: _type, ...payload } = event;
+    result = payload;
+    return true;
+  };
+
+  try {
+    outer: for (;;) {
+      const { done, value } = await reader.read();
+      if (value) buffer += decoder.decode(value, { stream: true });
+      // Consome todas as linhas completas acumuladas no buffer.
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        if (handleLine(line)) break outer;
+      }
+      if (done) {
+        // Fluxo encerrou sem \n final; processa o resto (defensivo).
+        if (buffer.trim()) handleLine(buffer);
+        break;
+      }
+    }
+  } finally {
+    void reader.cancel();
+  }
+
+  if (!result) {
+    throw new SidecarError(res.status, "stream encerrou sem evento 'done'", path);
+  }
+  return result;
 }
