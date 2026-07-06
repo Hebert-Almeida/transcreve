@@ -89,10 +89,12 @@ def _seed_models(src: Path | None, dst: Path) -> bool:
     # robocopy (não shutil): os caminhos do cache HF (snapshots/<hash>/arquivo)
     # passam de 260 chars e estouram o shutil.copytree (WinError 206). O robocopy
     # lida com caminhos longos nativamente. /E copia subpastas (inclui vazias).
+    # CREATE_NO_WINDOW evita piscar um console do robocopy no 1º boot (app é GUI).
     result = subprocess.run(
         ["robocopy", str(src), str(dst), "/E",
          "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP"],
         capture_output=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     # robocopy: códigos 0-7 são sucesso; >= 8 é erro real.
     if result.returncode >= 8:

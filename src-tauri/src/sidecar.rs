@@ -104,6 +104,19 @@ fn build_command(app: &tauri::AppHandle, port: u16) -> Result<Command, String> {
         .env("TRANSCREVE_PORT", port.to_string())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Em produção, o exe congelado é `console=True`; como o app é
+    // `windows_subsystem = "windows"` (sem console a herdar), o filho ganharia
+    // uma janela de console própria. `CREATE_NO_WINDOW` a suprime sem afetar os
+    // pipes de stdout/stderr (o `pump_logs` continua lendo os logs). Só em
+    // produção: em dev o console dos logs é útil.
+    #[cfg(windows)]
+    if !cfg!(debug_assertions) {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
     if let Some(dir) = data_dir(app) {
         command.env("TRANSCREVE_DATA_DIR", dir);
     }

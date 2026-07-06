@@ -128,7 +128,39 @@ npm install
 npm run tauri build
 ```
 
-O instalador final fica em `src-tauri/target/release/bundle/nsis/`.
+O instalador final fica em `src-tauri/target/release/bundle/nsis/` — o arquivo se chama
+`Transcreve_<versão>_x64-setup.exe` (a `<versão>` vem de `version` no `package.json` /
+`tauri.conf.json`). Como os modelos são semeados no primeiro boot (fora do instalador), o
+`.exe` fica enxuto.
+
+## 🚀 Como publicar a release no GitHub
+
+Depois de gerar o instalador acima, publique-o na página de [Releases](../../releases). Os
+artefatos são o instalador `.exe` e uma cópia **zipada** dele (mesmo conteúdo, só compactado
+para quem prefere baixar `.zip`).
+
+```powershell
+# 1) (opcional) Zipar o instalador — use a versão real no nome:
+Compress-Archive `
+  -Path "src-tauri\target\release\bundle\nsis\Transcreve_0.1.0_x64-setup.exe" `
+  -DestinationPath "src-tauri\target\release\bundle\nsis\Transcreve_0.1.0_x64-setup.zip"
+```
+
+Depois, publique com a [GitHub CLI](https://cli.github.com/) (`gh auth login` uma vez) —
+cria a tag, a release e anexa os dois arquivos de uma vez:
+
+```bash
+gh release create v0.1.0 \
+  "src-tauri/target/release/bundle/nsis/Transcreve_0.1.0_x64-setup.exe" \
+  "src-tauri/target/release/bundle/nsis/Transcreve_0.1.0_x64-setup.zip" \
+  --title "Transcreve v0.1.0" \
+  --notes "Descreva aqui as novidades desta versão."
+```
+
+> Alternativa sem CLI: **Releases → Draft a new release**, crie a tag `v0.1.0`, escreva as
+> notas e arraste o `.exe` (e o `.zip`) para a área de anexos. Publique.
+
+Convém manter a tag (`v0.1.0`), o título e a `version` do projeto em sincronia a cada release.
 
 ## 📄 Licença
 
