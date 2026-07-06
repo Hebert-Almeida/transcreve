@@ -38,35 +38,64 @@ iniciado e gerenciado automaticamente pelo Tauri.
 
 ## 🚀 Plataformas
 
-Atualmente empacotado para **Windows** (instalador NSIS). O código é multiplataforma por
-natureza (Tauri + Python), mas builds para macOS/Linux ainda não são publicados.
+Por enquanto, o Transcreve só tem instalador pronto para **Windows, versão 64 bits**
+Não existe versão para Windows de 32 bits, nem instalador pronto para macOS ou Linux ainda.
+O código foi feito para funcionar nesses sistemas no futuro, mas isso ainda não foi testado
+nem publicado — por enquanto, quem usa Mac ou Linux só consegue rodar o projeto "pelo código-fonte"
+(seção de desenvolvimento mais abaixo), o que exige mais conhecimento técnico.
 
 ## 📦 Status
 
 🚧 **Em desenvolvimento inicial** (`v0.1.0`) — funcional ponta a ponta (transcrição, análise
 qualitativa e quantitativa, exportação), mas ainda sem diarização de falantes.
 
-## 💾 Instalação (usuário final)
+## 💾 Como instalar (Windows)
 
-1. Baixe o instalador mais recente (`Transcreve_<versão>_x64-setup.exe`) na página de
-   [Releases](../../releases) do repositório.
-2. Execute o instalador. Ele pede privilégios de administrador (instalação por máquina) e
-   deixa você escolher a pasta de destino.
-3. Abra o Transcreve pelo atalho criado. No primeiro início, o app copia os modelos de IA
-   (~2,5 GB, já incluídos no instalador) para a pasta de dados — isso acontece uma única vez
-   e não requer internet.
-4. Pronto — depois disso o app funciona **totalmente offline**.
+Se você não sabe se seu Windows é 32 ou 64 bits: aperte a tecla Windows, digite
+"Informações do sistema" e abra o programa. Procure o campo "Tipo de sistema" — se aparecer
+"x64", seu computador é compatível.
 
-Os dados do usuário (banco SQLite, áudios, modelos semeados) ficam em `data/`, ao lado do
-executável instalado — tudo no mesmo disco escolhido na instalação, sem depender de
-`%APPDATA%`.
+1. Acesse a página de [Releases](../../releases) deste repositório (é a página onde ficam
+   as versões prontas para baixar).
+2. Na versão mais recente, clique para baixar o arquivo chamado
+   `Transcreve_<versão>_x64-setup.exe` (o `<versão>` é o número da versão, por exemplo `0.1.0`).
+3. Depois de baixado, dê dois cliques no arquivo para iniciar a instalação.
+   - O Windows pode mostrar um aviso de segurança (comum em programas novos e menos
+     conhecidos). Se aparecer, clique em "Mais informações" e depois em "Executar assim mesmo".
+   - O instalador vai pedir permissão de administrador — isso é necessário porque o programa
+     é instalado para todos os usuários do computador. Clique em "Sim".
+   - Escolha a pasta onde deseja instalar (ou apenas aceite a pasta sugerida) e siga as
+     instruções na tela até o fim.
+4. Abra o Transcreve pelo atalho que foi criado na área de trabalho ou no menu Iniciar.
+5. Na primeira vez que abrir, o programa vai copiar os modelos de inteligência artificial
+   (cerca de 2,5 GB) para a pasta de dados dele. Isso pode demorar alguns minutos, mas só
+   acontece uma vez e **não precisa de internet** (os modelos já vêm dentro do instalador).
+6. Pronto! Depois desse primeiro passo, o Transcreve funciona **totalmente offline** — ou
+   seja, sem precisar estar conectado à internet.
 
-### Requisitos do sistema
+Os arquivos que o programa cria (banco de dados, áudios, modelos) ficam guardados na pasta
+`data`, ao lado de onde o programa foi instalado.
 
-- Windows 10/11 64-bit.
-- ~4 GB de espaço em disco livre (app + modelos).
-- GPU NVIDIA (CUDA) é opcional — acelera a transcrição, mas o app funciona normalmente em
-  CPU (usa automaticamente um modelo menor em máquinas com pouca RAM).
+### Vou precisar de internet para usar o programa?
+
+Não. Depois da primeira abertura (que copia os modelos), o Transcreve funciona sem internet.
+Nenhum áudio ou dado seu é enviado para fora do computador.
+
+### macOS e Linux
+
+Ainda não existe um instalador pronto (tipo `.dmg` ou `.AppImage`) para macOS ou Linux. Se
+você usa um desses sistemas e quer experimentar o Transcreve, será necessário compilar o
+programa a partir do código-fonte — veja a seção "Desenvolvimento" logo abaixo. Esse caminho
+exige instalar ferramentas de programação (Node.js, Rust, Python) e é recomendado apenas
+para quem já tem alguma familiaridade com terminal/linha de comando.
+
+### O que meu computador precisa ter
+
+- Windows 10 ou 11, versão de 64 bits.
+- Cerca de 4 GB de espaço livre no disco (para o programa e os modelos de IA).
+- Uma placa de vídeo NVIDIA é opcional — ela deixa a transcrição mais rápida, mas o programa
+  funciona normalmente sem ela, apenas usando o processador (nesse caso, em computadores com
+  pouca memória RAM, ele escolhe automaticamente um modelo de IA mais leve).
 
 ## 🛠️ Desenvolvimento
 
