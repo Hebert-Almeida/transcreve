@@ -3,16 +3,17 @@
 Spec do PyInstaller para o sidecar do Transcreve (binário congelado offline).
 
 Gera um bundle **one-folder** (onedir) — onefile extrairia ~1.3GB a cada boot.
-Embarca o cache HF dos 3 modelos em `models/hub/` para que
-`runtime.bundled_hf_home()` (HF_HOME=<bundle>/models) os encontre offline.
+Os modelos de IA (~2,5 GB) NÃO entram no bundle: são entregues à parte (o
+instalador NSIS os baixa; o ZIP portátil os traz montados por
+scripts/release.py) e localizados em runtime via TRANSCREVE_MODELS_DIR.
 
 Uso:
     cd sidecar
     .venv312/Scripts/pyinstaller transcreve-sidecar.spec --noconfirm
 
 Saída: dist/transcreve-sidecar/ (pasta) com transcreve-sidecar.exe dentro.
-O build.py copia/renomeia para src-tauri/binaries/ com o sufixo do target-triple
-que o Tauri exige.
+O build.py espelha essa pasta para src-tauri/binaries/ (embarcada como resource
+do Tauri; sem sufixo de target-triple, pois não usamos externalBin).
 """
 from pathlib import Path
 
@@ -23,10 +24,10 @@ block_cipher = None
 SIDECAR_DIR = Path(SPECPATH)  # noqa: F821 (SPECPATH é injetado pelo PyInstaller)
 
 # --- Data files e submódulos das libs de IA -----------------------------------
-# OBS: o cache HF dos modelos NÃO é embarcado aqui. A estrutura
-# hub/snapshots/<hash>/arquivo estoura o limite de 260 caracteres do Windows no
-# COLLECT do PyInstaller. O build.py copia os modelos para _internal/models/hub/
-# DEPOIS do PyInstaller, via robocopy (que lida com caminhos longos).
+# OBS: o cache HF dos modelos NÃO é embarcado aqui (nem em lugar nenhum do
+# bundle) — 2,5 GB estouram o teto do instalador e a estrutura
+# hub/snapshots/<hash>/arquivo estoura o MAX_PATH do COLLECT. A entrega dos
+# modelos é externa (instalador baixa / ZIP portátil traz), descrita no topo.
 #
 # transformers/tokenizers/pysentimiento carregam recursos por nome em runtime;
 # collect_data_files garante que .json/.txt/etc. acompanhem o bundle.

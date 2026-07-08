@@ -48,19 +48,47 @@ fn pick_free_port() -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-/// Diretório de dados do app, passado ao sidecar para o banco e os áudios.
+/// Raiz do modo portátil: a pasta do exe, quando o zip portátil foi extraído.
 ///
-/// Em produção, os dados ficam AO LADO do app instalado (`<pasta do exe>\data`):
-/// assim tudo (programa, modelos e dados do usuário) mora no mesmo disco que o
-/// usuário escolheu no instalador — sem prender nada ao C:\...\Roaming. A pasta
-/// é gravável e persiste entre execuções; o instalador não a apaga ao remover.
+/// Detectado pela presença de `models\hub` ao lado do executável — a versão
+/// instalada nunca tem modelos junto do app (eles vão para %ProgramData%),
+/// então a presença dessa pasta identifica o modo portátil com segurança.
+fn portable_root() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?.to_path_buf();
+    if dir.join("models").join("hub").is_dir() {
+        Some(dir)
+    } else {
+        None
+    }
+}
+
+/// Diretório de dados do app (banco, áudios), passado ao sidecar.
+///
+/// Portátil: `<pasta do app>\data` — tudo viaja junto na pasta extraída.
+/// Instalado: `%LOCALAPPDATA%\Transcreve\data` — por usuário (os dados de
+/// pesquisa são confidenciais) e fora de Program Files, para a desinstalação
+/// não deixar órfãos nem updates tocarem nos dados; o desinstalador só remove
+/// a pasta se o usuário marcar a opção (ver hooks.nsi). Nas versões antigas
+/// (v0.1.0) era `<exe>\data` dentro de Program Files — o instalador migra.
 /// Em dev usamos o `app_data_dir` canônico (não há "pasta do exe" instalada).
 fn data_dir(app: &tauri::AppHandle) -> Option<String> {
     if !cfg!(debug_assertions) {
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(dir) = exe.parent() {
-                return Some(dir.join("data").to_string_lossy().into_owned());
-            }
+        if let Some(root) = portable_root() {
+            return Some(root.join("data").to_string_lossy().into_owned());
+        }
+        // Empacotamos só para Windows hoje; LOCALAPPDATA sempre existe lá.
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            return Some(
+                PathBuf::from(local)
+                    .join("Transcreve")
+                    .join("data")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
         }
     }
     app.path()
@@ -120,24 +148,38 @@ fn build_command(app: &tauri::AppHandle, port: u16) -> Result<Command, String> {
     if let Some(dir) = data_dir(app) {
         command.env("TRANSCREVE_DATA_DIR", dir);
     }
-    // Em produção, informa ao sidecar onde está o cache de modelos (2,5 GB) que
-    // é entregue AO LADO do app (fora do instalador, por limite de tamanho). O
-    // sidecar copia daí para o app-data no 1º boot (ver runtime.py).
-    if !cfg!(debug_assertions) {
-        if let Some(models) = models_source_dir(app) {
-            command.env("TRANSCREVE_MODELS_DIR", models);
-        }
+    // Onde está o cache de modelos de IA (~2,5 GB, layout do Hugging Face). O
+    // sidecar aponta HF_HOME direto para lá — nenhuma cópia no boot.
+    if let Some(models) = models_dir() {
+        command.env("TRANSCREVE_MODELS_DIR", models);
     }
     Ok(command)
 }
 
-/// Pasta de modelos entregue junto do app instalado (`<resource>/binaries/models`).
-/// Não é empacotada no instalador (estoura o teto), então é copiada para lá na
-/// distribuição. Se ausente, o sidecar recorre ao que já houver em app-data.
-fn models_source_dir(app: &tauri::AppHandle) -> Option<String> {
-    let resource_dir = app.path().resource_dir().ok()?;
-    let models = resource_dir.join("binaries").join("models");
-    Some(models.to_string_lossy().into_owned())
+/// Cache de modelos de IA (contém `hub/`), conforme o modo de distribuição.
+///
+/// Portátil: `<pasta do app>\models` (já vem no zip). Instalado:
+/// `%ProgramData%\Transcreve\models`, onde o instalador NSIS baixa os modelos
+/// durante a instalação — compartilhado entre usuários da máquina e intocado
+/// por updates (atualizar o app NÃO rebaixa os 2,5 GB; o instalador vê que os
+/// arquivos já existem e pula o download). Em dev retorna None: o sidecar usa
+/// o cache HF do próprio usuário e a rede, baixando sob demanda.
+fn models_dir() -> Option<String> {
+    if cfg!(debug_assertions) {
+        return None;
+    }
+    if let Some(root) = portable_root() {
+        return Some(root.join("models").to_string_lossy().into_owned());
+    }
+    // Empacotamos só para Windows hoje; o fallback literal nunca é usado lá.
+    let base = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".into());
+    Some(
+        PathBuf::from(base)
+            .join("Transcreve")
+            .join("models")
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
 /// Caminho do exe congelado dentro dos resources do bundle.

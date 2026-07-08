@@ -15,6 +15,7 @@ from typing import Callable, Iterable
 # Silencia aviso de symlinks do huggingface_hub no Windows (cache funciona igual).
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
+import runtime
 from config import Device, default_compute_type, resolve_device, suggest_model
 
 
@@ -74,6 +75,10 @@ def transcribe(
     resolved_model = suggest_model(model)
     resolved_device = resolve_device(device)
     compute_type = default_compute_type(resolved_device)
+
+    runtime.require_model(
+        f"*--faster-whisper-{resolved_model}", f"Whisper {resolved_model}"
+    )
 
     whisper = _load_model(resolved_model, resolved_device, compute_type)
 

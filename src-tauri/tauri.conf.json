@@ -26,6 +26,11 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "publisher": "Hebert Almeida",
+    "homepage": "https://github.com/Hebert-Almeida/transcreve",
+    "shortDescription": "Transcrição e análise de áudios de pesquisa — 100% local e offline.",
+    "longDescription": "Aplicativo desktop que transcreve áudios longos (entrevistas, grupos focais) e os analisa qualitativa e quantitativamente, sem enviar nenhum dado para a internet.",
+    "copyright": "© 2026 Hebert Almeida — GPL-3.0",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -40,7 +45,10 @@
     "windows": {
       "nsis": {
         "installMode": "perMachine",
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "./windows/hooks.nsi",
+        "languages": ["PortugueseBR", "English"],
+        "displayLanguageSelector": false
       }
     }
   }

@@ -1,12 +1,17 @@
 """
 Build do sidecar congelado e instalação no diretório de binários do Tauri.
 
-Roda o PyInstaller com `transcreve-sidecar.spec` (onedir), copia o cache HF dos
-modelos para dentro do bundle e espelha o resultado (exe + `_internal/`) para
-`src-tauri/binaries/`. Essa pasta é embarcada como `resource` do Tauri; o
-sidecar.rs resolve `binaries/transcreve-sidecar.exe` via resource_dir() e o
-executa diretamente (NÃO usamos `externalBin`, que empacota um único arquivo e
-não carregaria o `_internal/` irmão que o PyInstaller onedir exige).
+Roda o PyInstaller com `transcreve-sidecar.spec` (onedir) e espelha o resultado
+(exe + `_internal/`) para `src-tauri/binaries/`. Essa pasta é embarcada como
+`resource` do Tauri; o sidecar.rs resolve `binaries/transcreve-sidecar.exe` via
+resource_dir() e o executa diretamente (NÃO usamos `externalBin`, que empacota
+um único arquivo e não carregaria o `_internal/` irmão que o PyInstaller onedir
+exige).
+
+Os modelos de IA (~2,5 GB) NÃO entram no bundle — estouram o teto do instalador.
+Quem os entrega é: o instalador NSIS (baixa durante a instalação) e o ZIP
+portátil (scripts/release.py monta models/hub a partir do cache HF). O runtime
+os localiza por TRANSCREVE_MODELS_DIR, injetado pelo sidecar.rs.
 
 Uso (na .venv312):
     cd sidecar
@@ -22,11 +27,6 @@ from pathlib import Path
 SIDECAR_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SIDECAR_DIR.parent
 DIST_DIR = SIDECAR_DIR / "dist" / "transcreve-sidecar"
-# Os modelos ficam AO LADO do exe (não dentro de _internal): 2,5 GB estouram o
-# teto dos instaladores. runtime.source_models_dir() = <exe_dir>/models e o HF
-# espera models/hub/ dentro. No 1º boot o runtime copia p/ app-data.
-MODELS_DEST = DIST_DIR / "models" / "hub"
-HF_HUB = Path.home() / ".cache" / "huggingface" / "hub"
 BIN_DIR = REPO_ROOT / "src-tauri" / "binaries"
 
 
@@ -63,34 +63,6 @@ def run_pyinstaller() -> None:
     )
 
 
-def copy_models() -> None:
-    """Copia o cache HF dos modelos para _internal/models/hub/ via robocopy.
-
-    Feito FORA do PyInstaller porque a estrutura hub/snapshots/<hash>/arquivo
-    estoura o limite de 260 caracteres do COLLECT. O robocopy lida com caminhos
-    longos nativamente (e /MIR mantém o destino idêntico à origem).
-    """
-    if not HF_HUB.exists():
-        raise SystemExit(
-            f"[build] cache HF não encontrado em {HF_HUB}. Rode a Etapa 0 (download)."
-        )
-    MODELS_DEST.mkdir(parents=True, exist_ok=True)
-    print(f"[build] copiando modelos {HF_HUB} -> {MODELS_DEST} (robocopy)…")
-    # robocopy: códigos de saída 0-7 são sucesso; >=8 é erro real.
-    result = subprocess.run(
-        [
-            "robocopy",
-            str(HF_HUB),
-            str(MODELS_DEST),
-            "/MIR",  # espelha a árvore
-            "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP",  # saída enxuta
-        ],
-    )
-    if result.returncode >= 8:
-        raise SystemExit(f"[build] robocopy falhou (código {result.returncode})")
-    print("[build] modelos copiados.")
-
-
 def install_to_tauri() -> None:
     """Espelha o onedir (exe + _internal/) para `src-tauri/binaries/`.
 
@@ -108,8 +80,9 @@ def install_to_tauri() -> None:
 
     BIN_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Espelha via robocopy — os caminhos dos modelos passam de 260 chars, fora do
-    # alcance do shutil. /MIR mantém binaries/ idêntico ao dist/ (limpa sobras).
+    # Espelha via robocopy — mais robusto que shutil para árvores grandes.
+    # /MIR mantém binaries/ idêntico ao dist/ (limpa sobras de builds antigas,
+    # inclusive a pasta models/ que builds anteriores chegaram a copiar aqui).
     print(f"[build] espelhando bundle -> {BIN_DIR} (robocopy)…")
     result = subprocess.run(
         [
@@ -128,5 +101,4 @@ def install_to_tauri() -> None:
 
 if __name__ == "__main__":
     run_pyinstaller()
-    copy_models()  # popula dist/.../_internal/models antes de espelhar p/ binaries
     install_to_tauri()

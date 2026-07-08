@@ -12,8 +12,9 @@ minimalista, modo claro/escuro e suporte a Português (Brasil), Inglês e Espanh
 - 🎙️ **Transcrição local** de áudios longos com [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
   (Whisper `large-v3-turbo`, com fallback automático para o modelo `small` em máquinas com
   pouca RAM e sem GPU).
-- 🔒 **Confidencial por design** — o áudio nunca sai da máquina; funciona 100% offline após
-  a instalação (modelos já vêm embarcados).
+- 🔒 **Confidencial por design** — o áudio nunca sai da máquina; funciona 100% offline depois
+  que os modelos de IA estão no computador (baixados uma única vez na instalação, ou já
+  incluídos na versão portátil).
 - 📊 **Análises quantitativas** — frequência de termos, riqueza lexical, tempo por falante,
   velocidade de fala.
 - 🏷️ **Análise qualitativa** — codificação temática, word clouds, co-ocorrência de códigos.
@@ -55,31 +56,74 @@ Se você não sabe se seu Windows é 32 ou 64 bits: aperte a tecla Windows, digi
 "Informações do sistema" e abra o programa. Procure o campo "Tipo de sistema" — se aparecer
 "x64", seu computador é compatível.
 
-1. Acesse a página de [Releases](../../releases) deste repositório (é a página onde ficam
-   as versões prontas para baixar).
-2. Na versão mais recente, clique para baixar o arquivo chamado
-   `Transcreve_<versão>_x64-setup.exe` (o `<versão>` é o número da versão, por exemplo `0.1.0`).
-3. Depois de baixado, dê dois cliques no arquivo para iniciar a instalação.
-   - O Windows pode mostrar um aviso de segurança (comum em programas novos e menos
-     conhecidos). Se aparecer, clique em "Mais informações" e depois em "Executar assim mesmo".
-   - O instalador vai pedir permissão de administrador — isso é necessário porque o programa
-     é instalado para todos os usuários do computador. Clique em "Sim".
-   - Escolha a pasta onde deseja instalar (ou apenas aceite a pasta sugerida) e siga as
-     instruções na tela até o fim.
-4. Abra o Transcreve pelo atalho que foi criado na área de trabalho ou no menu Iniciar.
-5. Na primeira vez que abrir, o programa vai copiar os modelos de inteligência artificial
-   (cerca de 2,5 GB) para a pasta de dados dele. Isso pode demorar alguns minutos, mas só
-   acontece uma vez e **não precisa de internet** (os modelos já vêm dentro do instalador).
-6. Pronto! Depois desse primeiro passo, o Transcreve funciona **totalmente offline** — ou
-   seja, sem precisar estar conectado à internet.
+Há **duas formas** de usar o Transcreve. Escolha a que preferir:
 
-Os arquivos que o programa cria (banco de dados, áudios, modelos) ficam guardados na pasta
-`data`, ao lado de onde o programa foi instalado.
+| | **Instalador** | **Versão portátil (ZIP)** |
+|---|---|---|
+| Como funciona | Instala no computador, cria atalhos | Extrair e usar; não instala nada |
+| Modelos de IA (~2,5 GB) | **Baixados durante a instalação** (precisa de internet só nessa hora) | **Já vêm dentro do ZIP** (não baixa nada) |
+| Precisa de administrador | Sim (instala para todos os usuários) | Não |
+| Tamanho do download | Instalador pequeno + ~2,5 GB de modelos | ZIP único de ~2,5 GB |
+| Ideal para | Uso no seu próprio computador | Pen drive, computador compartilhado, sem internet no local |
+
+### Opção A — Instalador
+
+1. Acesse a página de [Releases](../../releases) deste repositório.
+2. Na versão mais recente, baixe o arquivo `Transcreve_<versão>_x64-setup.exe`
+   (o `<versão>` é o número da versão, por exemplo `0.1.0`).
+3. Dê dois cliques no arquivo para iniciar a instalação.
+   - O Windows pode mostrar um aviso de segurança (comum em programas novos sem assinatura
+     digital paga). Se aparecer, clique em "Mais informações" e depois em "Executar assim mesmo".
+   - O instalador pede permissão de administrador — é necessário porque o programa é
+     instalado para todos os usuários. Clique em "Sim".
+4. **Durante a instalação, o instalador baixa os modelos de inteligência artificial
+   (cerca de 2,5 GB) e explica na tela por que está fazendo isso.** Esses arquivos são
+   grandes demais para caber no instalador, então são baixados uma única vez, da própria
+   página oficial do projeto no GitHub. Uma barra de progresso mostra o andamento.
+   - **Precisa estar conectado à internet nessa etapa.** Se preferir deixar para depois, ou
+     se a conexão cair, é só executar o instalador novamente mais tarde — o download continua
+     de onde parou.
+5. Abra o Transcreve pelo atalho criado na área de trabalho ou no menu Iniciar.
+6. Pronto! A partir daí o Transcreve funciona **totalmente offline**.
+
+> **Atualizar não baixa os 2,5 GB de novo.** Ao instalar uma versão mais nova por cima, o
+> instalador percebe que os modelos já estão no computador e pula o download.
+
+### Opção B — Versão portátil (ZIP)
+
+Como o pacote portátil é grande (~2,5 GB), ele é publicado em **duas partes**
+(`...portatil.zip.001` e `...portatil.zip.002`). É preciso juntá-las uma única vez:
+
+1. Baixe **todas as partes** (`Transcreve-<versão>-portatil.zip.001` e `.002`) para a
+   mesma pasta.
+2. Junte as partes num arquivo só. No Windows, sem instalar nada: abra a pasta onde elas
+   estão, clique na barra de endereço, digite `cmd` e Enter; na janela preta, cole:
+   ```bat
+   copy /b Transcreve-0.1.0-portatil.zip.001 + Transcreve-0.1.0-portatil.zip.002 Transcreve-0.1.0-portatil.zip
+   ```
+   (troque `0.1.0` pela versão que você baixou). Isso cria o `Transcreve-<versão>-portatil.zip`.
+3. Clique com o botão direito nesse `.zip` → "Extrair tudo" e escolha um lugar (pode ser a
+   Área de Trabalho ou um pen drive). **Mantenha os arquivos juntos** — não separe o
+   `Transcreve.exe` da pasta `models`.
+4. Entre na pasta extraída e dê dois cliques em `Transcreve.exe`. (Na primeira vez o Windows
+   pode pedir confirmação, como em qualquer programa novo sem assinatura paga.)
+5. Pronto — funciona **offline desde o primeiro uso**, sem baixar mais nada.
+
+### Onde ficam os seus arquivos
+
+- **Instalador:** os dados que você cria (banco de dados, transcrições, áudios) ficam em
+  `%LOCALAPPDATA%\Transcreve\data` (na sua conta de usuário). Os modelos de IA ficam em
+  `C:\ProgramData\Transcreve\models` (compartilhados por todos os usuários). Assim,
+  desinstalar ou reinstalar o programa não apaga o seu trabalho.
+- **Versão portátil:** tudo fica **dentro da própria pasta** que você extraiu — os modelos em
+  `models\` e o seu trabalho em `data\`. Para backup ou para levar a outro computador, basta
+  copiar a pasta inteira.
 
 ### Vou precisar de internet para usar o programa?
 
-Não. Depois da primeira abertura (que copia os modelos), o Transcreve funciona sem internet.
-Nenhum áudio ou dado seu é enviado para fora do computador.
+Só uma vez, e só na Opção A: o instalador baixa os modelos durante a instalação. Depois disso
+(ou desde o começo, se você usar a versão portátil) o Transcreve funciona **sem internet**.
+Nenhum áudio ou dado seu é enviado para fora do computador em momento algum.
 
 ### macOS e Linux
 
@@ -141,55 +185,100 @@ uvicorn app:app --reload         # sobe o servidor FastAPI isolado, se precisar 
 
 ## 📦 Como gerar um build de instalação (release)
 
-O sidecar precisa ser "congelado" com PyInstaller *antes* de empacotar o app com o Tauri —
-não existe pipeline de CI para isso ainda, o processo é local:
+Não há CI ainda — o processo é local. São dois artefatos (instalador e ZIP portátil) e uma
+release fixa só com os modelos.
+
+### Entrega dos modelos, em resumo
+
+Os modelos de IA (~2,5 GB) **não entram** no instalador (o NSIS usa `mmap` e falha perto de
+2 GB) nem no bundle do sidecar. Eles ficam numa release à parte, `modelos-v1`, como 16
+arquivos soltos:
+
+- O **instalador** baixa esses arquivos durante a instalação, para
+  `C:\ProgramData\Transcreve\models`, e confere o SHA-256 de cada um. Atualizações pulam o
+  download (os arquivos já existem com o tamanho certo).
+- A **versão portátil** já traz os mesmos arquivos dentro de `models\hub\`.
+
+Os hashes/tamanhos ficam em `src-tauri/windows/models_manifest.nsh`, **gerado** por
+`scripts/release.py` a partir do cache Hugging Face local — não edite à mão.
+
+### Passo a passo
 
 ```bash
-# 1) Com a venv312 do sidecar ativa e os modelos já baixados no cache HF do usuário:
+# 0) Uma vez: garanta os 3 modelos no cache HF do usuário (~/.cache/huggingface/hub).
+#    Rodar o app em dev (npm run tauri dev) e transcrever um áudio curto já baixa tudo.
+
+# 1) Gere o manifesto NSIS dos modelos (necessário para o instalador compilar):
+python scripts/release.py manifest
+
+# 2) Congele o sidecar com PyInstaller e espelhe para src-tauri/binaries/:
 cd sidecar
 python build.py
-# Isso roda o PyInstaller (onedir), copia os modelos (~2,5 GB) e espelha tudo para
-# src-tauri/binaries/ (embarcado como resource do Tauri).
-
-# 2) Na raiz do projeto, gere o instalador Windows (NSIS):
 cd ..
+
+# 3) Gere o instalador Windows (NSIS). É aqui que os ganchos que baixam os modelos
+#    são compilados; o manifesto do passo 1 precisa existir.
 npm install
 npm run tauri build
+
+# 4) Monte a versão portátil (exe + binaries + models/hub + LEIA-ME) num único .zip,
+#    e prepare os 16 arquivos da release de modelos:
+python scripts/release.py all
 ```
 
-O instalador final fica em `src-tauri/target/release/bundle/nsis/` — o arquivo se chama
-`Transcreve_<versão>_x64-setup.exe` (a `<versão>` vem de `version` no `package.json` /
-`tauri.conf.json`). Como os modelos são semeados no primeiro boot (fora do instalador), o
-`.exe` fica enxuto.
+Saídas:
 
-## 🚀 Como publicar a release no GitHub
+- Instalador: `src-tauri/target/release/bundle/nsis/Transcreve_<versão>_x64-setup.exe`.
+- Portátil: `dist/Transcreve-<versão>-portatil.zip`.
+- Arquivos dos modelos: `dist/release-assets/` (+ `SHA256SUMS.txt`).
 
-Depois de gerar o instalador acima, publique-o na página de [Releases](../../releases). Os
-artefatos são o instalador `.exe` e uma cópia **zipada** dele (mesmo conteúdo, só compactado
-para quem prefere baixar `.zip`).
+A `<versão>` vem de `version` no `package.json` / `tauri.conf.json`.
 
-```powershell
-# 1) (opcional) Zipar o instalador — use a versão real no nome:
-Compress-Archive `
-  -Path "src-tauri\target\release\bundle\nsis\Transcreve_0.1.0_x64-setup.exe" `
-  -DestinationPath "src-tauri\target\release\bundle\nsis\Transcreve_0.1.0_x64-setup.zip"
-```
+## 🚀 Como publicar as releases no GitHub
 
-Depois, publique com a [GitHub CLI](https://cli.github.com/) (`gh auth login` uma vez) —
-cria a tag, a release e anexa os dois arquivos de uma vez:
+São **duas** releases: a dos modelos (só na primeira vez, ou quando os modelos mudarem) e a
+da aplicação (a cada versão). Publique com a [GitHub CLI](https://cli.github.com/)
+(`gh auth login` uma vez).
+
+**1) Release dos modelos** (`modelos-v1`) — a URL fixa de onde o instalador baixa. Só precisa
+existir uma vez; não mude a tag sem também atualizar `TC_MODELS_URL` no
+`src-tauri/windows/hooks.nsi`. O comando exato é impresso por `python scripts/release.py assets`:
 
 ```bash
+gh release create modelos-v1 "dist/release-assets/"* \
+  --title "Modelos de IA do Transcreve (v1)" \
+  --notes "Modelos usados pelo instalador. Baixados uma única vez durante a instalação."
+```
+
+**2) Release da aplicação** (ex.: `v0.1.0`) — o instalador e o ZIP portátil:
+
+```bash
+# Cria a release já com o instalador:
 gh release create v0.1.0 \
   "src-tauri/target/release/bundle/nsis/Transcreve_0.1.0_x64-setup.exe" \
-  "src-tauri/target/release/bundle/nsis/Transcreve_0.1.0_x64-setup.zip" \
   --title "Transcreve v0.1.0" \
   --notes "Descreva aqui as novidades desta versão."
 ```
 
-> Alternativa sem CLI: **Releases → Draft a new release**, crie a tag `v0.1.0`, escreva as
-> notas e arraste o `.exe` (e o `.zip`) para a área de anexos. Publique.
+**ZIP portátil em partes.** O ZIP passa de 2 GiB, que é o limite por arquivo do GitHub
+Releases. Por isso o `python scripts/release.py portable` já o divide em partes < 2 GiB
+(`Transcreve-<versão>-portatil.zip.001`, `.002`, …) em `dist/`. Anexe as partes à mesma
+release (o comando exato é impresso pelo script):
 
-Convém manter a tag (`v0.1.0`), o título e a `version` do projeto em sincronia a cada release.
+```bash
+gh release upload v0.1.0 "dist/Transcreve-0.1.0-portatil.zip."* --clobber
+```
+
+E **nas notas da release**, explique ao usuário como juntar as partes antes de extrair
+(no Windows, sem instalar nada):
+
+```bat
+copy /b Transcreve-0.1.0-portatil.zip.001 + Transcreve-0.1.0-portatil.zip.002 Transcreve-0.1.0-portatil.zip
+```
+
+Depois é só extrair o `.zip` resultante normalmente.
+
+Mantenha a tag (`v0.1.0`), o título e a `version` do projeto em sincronia a cada release.
 
 ## 📄 Licença
 

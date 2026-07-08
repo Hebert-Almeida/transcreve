@@ -27,6 +27,10 @@ _analyzer: Any = None
 def _get_analyzer() -> Any:
     global _analyzer
     if _analyzer is None:
+        import runtime
+
+        runtime.require_model("pysentimiento--*", "análise de sentimento")
+
         from pysentimiento import create_analyzer
 
         _analyzer = create_analyzer(task="sentiment", lang="pt")
